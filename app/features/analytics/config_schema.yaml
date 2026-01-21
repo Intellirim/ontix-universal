@@ -1,0 +1,94 @@
+### **app/features/analytics/config_schema.yaml**
+
+
+# Analytics Feature Configuration Schema
+
+schema:
+  type: object
+  required:
+    - metrics
+    - default_period
+  
+  properties:
+    metrics:
+      type: array
+      items:
+        type: string
+        enum:
+          - likes
+          - comments
+          - shares
+          - views
+          - engagement_rate
+          - reach
+          - impressions
+      minItems: 1
+      description: "추적할 메트릭 목록"
+      
+    default_period:
+      type: integer
+      default: 30
+      minimum: 1
+      maximum: 365
+      description: "기본 분석 기간 (일)"
+      
+    top_n:
+      type: integer
+      default: 10
+      minimum: 1
+      maximum: 100
+      description: "상위 N개 게시물 분석"
+      
+    include_weekends:
+      type: boolean
+      default: true
+      description: "주말 데이터 포함 여부"
+      
+    comparison_enabled:
+      type: boolean
+      default: true
+      description: "기간 비교 기능 활성화"
+      
+    alert_thresholds:
+      type: object
+      properties:
+        low_engagement:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: "낮은 참여율 알림 임계값"
+        high_engagement:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: "높은 참여율 알림 임계값"
+      description: "알림 임계값 설정"
+
+examples:
+  - name: "기본 분석 설정"
+    config:
+      metrics:
+        - likes
+        - comments
+        - engagement_rate
+      default_period: 30
+      top_n: 10
+      
+  - name: "상세 분석 설정"
+    config:
+      metrics:
+        - likes
+        - comments
+        - shares
+        - views
+        - engagement_rate
+        - reach
+      default_period: 90
+      top_n: 20
+      comparison_enabled: true
+      alert_thresholds:
+        low_engagement: 0.05
+        high_engagement: 0.20
+
+
+---

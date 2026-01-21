@@ -1,0 +1,42 @@
+### **configs/platform/cache.yaml**
+
+# ============================================
+# Cache Configuration
+# ============================================
+
+redis:
+  # 연결 설정
+  connection:
+    timeout: 5
+    socket_timeout: 5
+    max_connections: 50
+    
+  # TTL 설정 (초)
+  ttl:
+    default: 3600        # 1시간
+    short: 300          # 5분
+    long: 86400         # 24시간
+    
+  # 캐시 키 프리픽스
+  key_prefix:
+    query: "query"
+    config: "config"
+    analytics: "analytics"
+
+# ============================================
+# Cache Strategy
+# ============================================
+strategy:
+  # 질문 응답 캐싱
+  enable_query_cache: true
+  
+  # 설정 캐싱
+  enable_config_cache: true
+  
+  # 검색 결과 캐싱
+  enable_retrieval_cache: false
+  
+  # 캐시 무효화 정책
+  invalidation:
+    on_config_change: true
+    on_data_sync: true

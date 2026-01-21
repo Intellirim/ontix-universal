@@ -1,0 +1,85 @@
+### **app/features/advisor/config_schema.yaml**
+
+
+# Advisor Feature Configuration Schema
+
+schema:
+  type: object
+  required:
+    - expertise_level
+  
+  properties:
+    expertise_level:
+      type: string
+      enum:
+        - beginner
+        - intermediate
+        - advanced
+        - professional
+        - philosophical
+      default: intermediate
+      description: "기본 전문성 레벨"
+      
+    include_examples:
+      type: boolean
+      default: true
+      description: "예시 포함 여부"
+      
+    response_depth:
+      type: string
+      enum:
+        - brief
+        - standard
+        - detailed
+        - comprehensive
+      default: standard
+      description: "응답 깊이"
+      
+    focus_areas:
+      type: array
+      items:
+        type: string
+      description: "전문 분야 목록"
+      example:
+        - marketing
+        - strategy
+        - operations
+        
+    philosophy:
+      type: string
+      description: "철학적 기반 (특정 브랜드용)"
+      example: "Homo Exercens"
+      
+    include_references:
+      type: boolean
+      default: false
+      description: "참고 자료 링크 포함"
+      
+    step_by_step:
+      type: boolean
+      default: true
+      description: "단계별 가이드 제공"
+
+examples:
+  - name: "일반 조언자"
+    config:
+      expertise_level: intermediate
+      include_examples: true
+      response_depth: standard
+      focus_areas:
+        - business
+        - productivity
+        
+  - name: "철학적 조언자 (SERKAN)"
+    config:
+      expertise_level: philosophical
+      include_examples: true
+      response_depth: comprehensive
+      philosophy: "Homo Exercens"
+      focus_areas:
+        - self-cultivation
+        - life-philosophy
+        - practical-wisdom
+
+
+---

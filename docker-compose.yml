@@ -1,0 +1,90 @@
+### **docker-compose.yml**
+
+```yaml
+# ============================================
+# ONTIX Universal Platform
+# Docker Compose Configuration
+# ============================================
+
+version: '3.8'
+
+services:
+  # ==========================================
+  # Neo4j Database
+  # ==========================================
+  neo4j:
+    image: neo4j:5.15.0
+    container_name: ontix-neo4j
+    ports:
+      - "7474:7474"  # HTTP
+      - "7687:7687"  # Bolt
+    environment:
+      - NEO4J_AUTH=neo4j/password
+      - NEO4J_PLUGINS=["apoc"]
+      - NEO4J_dbms_security_procedures_unrestricted=apoc.*
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    networks:
+      - ontix-network
+    restart: unless-stopped
+
+  # ==========================================
+  # Redis Cache
+  # ==========================================
+  redis:
+    image: redis:7-alpine
+    container_name: ontix-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - ontix-network
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+
+  # ==========================================
+  # ONTIX Application
+  # ==========================================
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ontix-app
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_ENV=production
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USERNAME=neo4j
+      - NEO4J_PASSWORD=password
+      - REDIS_URL=redis://redis:6379
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    volumes:
+      - ./configs:/app/configs:ro
+      - ./prompts:/app/prompts:ro
+    depends_on:
+      - neo4j
+      - redis
+    networks:
+      - ontix-network
+    restart: unless-stopped
+
+# ==========================================
+# Volumes
+# ==========================================
+volumes:
+  neo4j_data:
+  neo4j_logs:
+  redis_data:
+
+# ==========================================
+# Networks
+# ==========================================
+networks:
+  ontix-network:
+    driver: bridge
+```
+
+---

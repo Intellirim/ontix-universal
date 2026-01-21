@@ -1,0 +1,80 @@
+### **app/features/product_recommendation/config_schema.yaml**
+
+
+# Product Recommendation Feature Configuration Schema
+
+schema:
+  type: object
+  required:
+    - enable_stock_filter
+    - default_limit
+  
+  properties:
+    enable_stock_filter:
+      type: boolean
+      default: true
+      description: "재고 있는 상품만 필터링 여부"
+      
+    default_limit:
+      type: integer
+      default: 10
+      minimum: 1
+      maximum: 50
+      description: "기본 추천 상품 개수"
+      
+    sort_by:
+      type: string
+      enum:
+        - stock
+        - price
+        - popularity
+        - rating
+      default: stock
+      description: "상품 정렬 기준"
+      
+    price_range:
+      type: object
+      properties:
+        min:
+          type: integer
+          minimum: 0
+          description: "최소 가격"
+        max:
+          type: integer
+          minimum: 0
+          description: "최대 가격"
+      description: "가격 범위 필터"
+      
+    categories:
+      type: array
+      items:
+        type: string
+      description: "추천 가능한 카테고리 목록"
+      
+    show_out_of_stock:
+      type: boolean
+      default: false
+      description: "품절 상품 표시 여부"
+
+# 사용 예시
+examples:
+  - name: "기본 설정"
+    config:
+      enable_stock_filter: true
+      default_limit: 10
+      sort_by: stock
+      
+  - name: "프리미엄 브랜드 설정"
+    config:
+      enable_stock_filter: true
+      default_limit: 5
+      sort_by: price
+      price_range:
+        min: 100000
+        max: 1000000
+      categories:
+        - premium
+        - luxury
+
+
+---

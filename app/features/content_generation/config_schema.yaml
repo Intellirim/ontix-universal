@@ -1,0 +1,101 @@
+### **app/features/content_generation/config_schema.yaml**
+
+
+# Content Generation Feature Configuration Schema
+
+schema:
+  type: object
+  
+  properties:
+    default_content_type:
+      type: string
+      enum:
+        - blog_post
+        - social_caption
+        - product_description
+        - email
+        - advertisement
+      default: social_caption
+      description: "기본 콘텐츠 타입"
+      
+    default_tone:
+      type: string
+      enum:
+        - professional
+        - casual
+        - friendly
+        - formal
+        - creative
+        - philosophical
+      default: professional
+      description: "기본 톤"
+      
+    max_length:
+      type: integer
+      default: 1000
+      minimum: 100
+      maximum: 10000
+      description: "최대 콘텐츠 길이 (글자)"
+      
+    include_hashtags:
+      type: boolean
+      default: true
+      description: "해시태그 자동 생성"
+      
+    hashtag_count:
+      type: integer
+      default: 5
+      minimum: 0
+      maximum: 30
+      description: "생성할 해시태그 개수"
+      
+    style_guidelines:
+      type: object
+      properties:
+        avoid_words:
+          type: array
+          items:
+            type: string
+          description: "피해야 할 단어 목록"
+        preferred_words:
+          type: array
+          items:
+            type: string
+          description: "선호하는 단어 목록"
+        brand_voice:
+          type: string
+          description: "브랜드 보이스 설명"
+      description: "스타일 가이드라인"
+      
+    enable_alternatives:
+      type: boolean
+      default: true
+      description: "대안 콘텐츠 생성"
+      
+    alternatives_count:
+      type: integer
+      default: 3
+      minimum: 0
+      maximum: 10
+      description: "생성할 대안 개수"
+
+examples:
+  - name: "소셜 미디어 콘텐츠"
+    config:
+      default_content_type: social_caption
+      default_tone: casual
+      max_length: 300
+      include_hashtags: true
+      hashtag_count: 5
+      
+  - name: "블로그 포스트"
+    config:
+      default_content_type: blog_post
+      default_tone: professional
+      max_length: 2000
+      include_hashtags: false
+      style_guidelines:
+        brand_voice: "전문적이면서도 접근하기 쉬운"
+
+
+---

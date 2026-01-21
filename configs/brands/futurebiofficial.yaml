@@ -1,0 +1,28 @@
+brand:
+  id: futurebiofficial
+  name: 퓨처바이오피셜
+  description: 안이테이징을 대중화시켜 모두의 노화를 느리게 한다.
+  industry: 안티에이징
+features:
+- chat
+- validation
+- advisor
+- analytics
+- product_recommendation
+- content_generation
+- social_monitoring
+- onboarding
+neo4j:
+  brand_id: futurebiofficial
+  namespaces:
+  - futurebiofficial
+retrieval:
+  default_top_k: 5
+  sources:
+  - neo4j_products
+  - vector
+generation:
+  default:
+    model: gpt-5-mini
+    temperature: 0.7  # GPT-5에서는 무시됨
+    max_tokens: 1000

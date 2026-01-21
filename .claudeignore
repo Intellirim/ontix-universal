@@ -1,0 +1,47 @@
+# VS Code에서
+@"
+# Python
+pycache/
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+env/
+ENV/
+
+# 데이터
+data/
+logs/
+*.log
+*.csv
+*.json
+datasets/
+
+# Node
+node_modules/
+package-lock.json
+
+# Git
+.git/
+
+# IDE
+.vscode/
+.idea/
+
+# 캐시
+.cache/
+*.cache
+
+# 빌드
+build/
+dist/
+*.egg-info/
+
+# 대용량
+*.db
+*.sqlite
+*.h5
+*.pkl
+*.pickle
+"@ | Out-File -FilePath .claudeignore -Encoding utf8

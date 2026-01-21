@@ -1,0 +1,248 @@
+# ============================================
+# ONTIX Universal Platform - Filters v2.0 Configuration
+# ============================================
+
+# ============================================
+# Global Filter Settings
+# ============================================
+filters:
+  # 전역 활성화 여부
+  enabled: true
+
+  # 기본 로깅 설정
+  logging:
+    enabled: true
+    verbose: false
+    log_scores: true
+    log_issues: true
+
+# ============================================
+# Quality Filter Configuration
+# ============================================
+quality:
+  enabled: true
+
+  # 기본 임계값
+  defaults:
+    min_score: 0.5
+    min_length: 20
+    optimal_min_length: 50
+    max_length: 2000
+
+  # 언어 설정
+  language: "ko"
+
+  # 품질 레벨 임계값
+  levels:
+    excellent: 0.9    # 90% 이상
+    good: 0.7         # 70% 이상
+    acceptable: 0.5   # 50% 이상
+    poor: 0.3         # 30% 이상
+    # 30% 미만은 unacceptable
+
+  # 차원별 가중치
+  dimension_weights:
+    clarity: 0.20      # 명확성
+    completeness: 0.20 # 완전성
+    accuracy: 0.20     # 정확성
+    relevance: 0.15    # 관련성
+    coherence: 0.15    # 일관성
+    professionalism: 0.10  # 전문성
+
+# ============================================
+# Trust Filter Configuration
+# ============================================
+trust:
+  enabled: true
+
+  # 기본 임계값
+  defaults:
+    min_score: 0.5
+    hallucination_threshold: 0.3
+
+  # 신뢰 레벨 임계값
+  levels:
+    verified: 0.9     # 90% 이상 - 검증됨
+    high: 0.7         # 70% 이상 - 높은 신뢰
+    medium: 0.5       # 50% 이상 - 중간 신뢰
+    low: 0.3          # 30% 이상 - 낮은 신뢰
+    # 30% 미만은 untrusted
+
+  # 환각 감지 패턴
+  hallucination_detection:
+    enabled: true
+    check_unrealistic_numbers: true
+    check_absolute_claims: true
+    check_source_consistency: true
+
+  # 검증 유형별 가중치
+  verification_weights:
+    source_verification: 0.30
+    fact_checking: 0.30
+    consistency_check: 0.20
+    claim_verification: 0.20
+
+# ============================================
+# Relevance Filter Configuration
+# ============================================
+relevance:
+  enabled: true
+
+  # 기본 임계값
+  defaults:
+    min_score: 0.5
+
+  # 관련성 레벨 임계값
+  levels:
+    highly_relevant: 0.8   # 80% 이상
+    relevant: 0.6          # 60% 이상
+    partially_relevant: 0.4  # 40% 이상
+    # 40% 미만은 irrelevant
+
+  # 관련성 유형별 가중치
+  type_weights:
+    keyword: 0.25
+    semantic: 0.35
+    intent: 0.25
+    context: 0.15
+
+# ============================================
+# Validation Filter Configuration (종합)
+# ============================================
+validation:
+  enabled: true
+
+  # 개별 필터 활성화
+  filters:
+    quality: true
+    trust: true
+    relevance: true
+
+  # 필터별 가중치 (종합 점수 계산용)
+  weights:
+    quality: 0.35
+    trust: 0.35
+    relevance: 0.30
+
+  # 등급 임계값
+  grades:
+    A: 0.9   # 90% 이상 - 우수
+    B: 0.8   # 80% 이상 - 양호
+    C: 0.7   # 70% 이상 - 보통
+    D: 0.5   # 50% 이상 - 미흡
+    # 50% 미만은 F (불합격)
+
+  # 검증 상태
+  status:
+    pass_threshold: 0.7      # 통과 기준
+    warning_threshold: 0.5   # 경고 기준
+    # 50% 미만은 fail
+
+# ============================================
+# Feature-specific Filter Overrides
+# ============================================
+feature_overrides:
+  # 상품 추천 - 신뢰성 중시
+  product_recommendation:
+    quality:
+      min_score: 0.6
+    trust:
+      min_score: 0.7
+      hallucination_threshold: 0.2
+    validation:
+      weights:
+        quality: 0.30
+        trust: 0.40
+        relevance: 0.30
+
+  # 분석 - 정확성 중시
+  analytics:
+    quality:
+      min_score: 0.7
+    trust:
+      min_score: 0.7
+      hallucination_threshold: 0.2
+    validation:
+      weights:
+        quality: 0.35
+        trust: 0.40
+        relevance: 0.25
+
+  # 콘텐츠 생성 - 품질 중시
+  content_generation:
+    quality:
+      min_score: 0.7
+      optimal_min_length: 200
+    trust:
+      min_score: 0.5
+    validation:
+      weights:
+        quality: 0.45
+        trust: 0.30
+        relevance: 0.25
+
+  # 조언 - 균형 중시
+  advisor:
+    quality:
+      min_score: 0.5
+    trust:
+      min_score: 0.6
+      hallucination_threshold: 0.3
+    validation:
+      weights:
+        quality: 0.35
+        trust: 0.35
+        relevance: 0.30
+
+  # 온보딩 - 명확성 중시
+  onboarding:
+    quality:
+      min_score: 0.6
+      min_length: 50
+    trust:
+      min_score: 0.5
+    validation:
+      weights:
+        quality: 0.40
+        trust: 0.30
+        relevance: 0.30
+
+  # 소셜 모니터링 - 관련성 중시
+  social_monitoring:
+    quality:
+      min_score: 0.5
+    trust:
+      min_score: 0.5
+    relevance:
+      min_score: 0.6
+    validation:
+      weights:
+        quality: 0.30
+        trust: 0.30
+        relevance: 0.40
+
+  # 사실 기반 응답 - 신뢰성 최우선
+  factual:
+    quality:
+      min_score: 0.6
+    trust:
+      min_score: 0.8
+      hallucination_threshold: 0.15
+    validation:
+      weights:
+        quality: 0.25
+        trust: 0.50
+        relevance: 0.25
+
+  # 대화형 - 자연스러움 중시
+  conversational:
+    quality:
+      min_score: 0.4
+      min_length: 10
+    trust:
+      min_score: 0.4
+    validation:
+      weights:
+        quality: 0.40
+        trust: 0.25
+        relevance: 0.35

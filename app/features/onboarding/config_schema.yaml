@@ -1,0 +1,109 @@
+### **app/features/onboarding/config_schema.yaml**
+
+
+# Onboarding Feature Configuration Schema
+
+schema:
+  type: object
+  
+  properties:
+    steps:
+      type: array
+      items:
+        type: string
+        enum:
+          - welcome
+          - feature_intro
+          - first_action
+          - tutorial
+          - completion
+      default:
+        - welcome
+        - feature_intro
+        - first_action
+        - completion
+      description: "온보딩 단계"
+      
+    skip_enabled:
+      type: boolean
+      default: true
+      description: "온보딩 건너뛰기 허용"
+      
+    progress_tracking:
+      type: boolean
+      default: true
+      description: "진행 상황 추적"
+      
+    welcome_message:
+      type: string
+      description: "환영 메시지 커스터마이징"
+      
+    key_features:
+      type: array
+      items:
+        type: object
+        properties:
+          name:
+            type: string
+          description:
+            type: string
+          icon:
+            type: string
+      maxItems: 5
+      description: "소개할 핵심 기능"
+      
+    completion_reward:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        type:
+          type: string
+          enum:
+            - badge
+            - discount
+            - credit
+        value:
+          type: string
+      description: "완료 보상"
+      
+    auto_advance:
+      type: boolean
+      default: false
+      description: "자동으로 다음 단계 진행"
+
+examples:
+  - name: "기본 온보딩"
+    config:
+      steps:
+        - welcome
+        - feature_intro
+        - first_action
+        - completion
+      skip_enabled: true
+      progress_tracking: true
+      
+  - name: "SaaS 온보딩"
+    config:
+      steps:
+        - welcome
+        - feature_intro
+        - tutorial
+        - first_action
+        - completion
+      skip_enabled: false
+      progress_tracking: true
+      key_features:
+        - name: "Dashboard"
+          description: "실시간 데이터 확인"
+          icon: "chart"
+        - name: "Analytics"
+          description: "상세 분석 리포트"
+          icon: "graph"
+      completion_reward:
+        enabled: true
+        type: credit
+        value: "1000"
+
+
+---

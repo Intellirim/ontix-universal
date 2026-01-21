@@ -1,0 +1,106 @@
+### **app/features/social_monitoring/config_schema.yaml**
+
+# Social Monitoring Feature Configuration Schema
+
+schema:
+  type: object
+  required:
+    - platforms
+    - keywords
+  
+  properties:
+    platforms:
+      type: array
+      items:
+        type: string
+        enum:
+          - instagram
+          - twitter
+          - facebook
+          - youtube
+          - tiktok
+      minItems: 1
+      description: "모니터링할 플랫폼"
+      
+    keywords:
+      type: array
+      items:
+        type: string
+      minItems: 1
+      description: "추적할 키워드"
+      
+    monitoring_interval:
+      type: integer
+      default: 60
+      minimum: 5
+      maximum: 1440
+      description: "모니터링 주기 (분)"
+      
+    alert_threshold:
+      type: object
+      properties:
+        mentions:
+          type: integer
+          minimum: 1
+          description: "멘션 수 알림 임계값"
+        sentiment:
+          type: string
+          enum:
+            - positive
+            - neutral
+            - negative
+          description: "감정 알림 조건"
+        engagement:
+          type: integer
+          minimum: 0
+          description: "참여도 알림 임계값"
+      description: "알림 임계값"
+      
+    sentiment_analysis:
+      type: boolean
+      default: true
+      description: "감정 분석 활성화"
+      
+    auto_response:
+      type: boolean
+      default: false
+      description: "자동 응답 활성화"
+      
+    blacklist_users:
+      type: array
+      items:
+        type: string
+      description: "제외할 사용자 목록"
+
+examples:
+  - name: "기본 모니터링"
+    config:
+      platforms:
+        - instagram
+        - twitter
+      keywords:
+        - "브랜드명"
+        - "제품명"
+      monitoring_interval: 60
+      sentiment_analysis: true
+      
+  - name: "고급 모니터링"
+    config:
+      platforms:
+        - instagram
+        - twitter
+        - facebook
+      keywords:
+        - "브랜드명"
+        - "제품명"
+        - "경쟁사명"
+      monitoring_interval: 30
+      alert_threshold:
+        mentions: 10
+        sentiment: negative
+        engagement: 100
+      sentiment_analysis: true
+      auto_response: false
+
+
+---

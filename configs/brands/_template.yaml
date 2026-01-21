@@ -1,0 +1,108 @@
+# ============================================
+# ONTIX Universal - Brand Configuration Template
+# ============================================
+# 이 템플릿을 복사하여 새 브랜드 설정을 만드세요.
+
+brand:
+  id: "template"
+  name: "Template Brand"
+  description: "A template brand"
+  industry: "General"
+
+# ============================================
+# Features (활성화할 기능 목록)
+# ============================================
+features:
+  - conversational
+  - factual
+
+# ============================================
+# Neo4j Configuration
+# ============================================
+neo4j:
+  brand_id: "template"
+  namespaces:
+    - "template"
+  vector_index: "ontix_global_concept_index"
+
+# ============================================
+# Retrieval Configuration
+# ============================================
+retrieval:
+  factual:
+    retrievers:
+      - graph
+      - vector
+    max_results: 10
+
+  conversational:
+    retrievers:
+      - graph
+    max_results: 5
+
+# ============================================
+# Generation Configuration
+# ============================================
+generation:
+  factual:
+    type: factual
+    fallback_prompt: shared/factual/base.txt
+    model: mini
+    temperature: 0
+
+  conversational:
+    type: conversational
+    fallback_prompt: shared/conversational/base.txt
+    model: full
+    temperature: 0.8
+
+# ============================================
+# Filters v2.0 Configuration
+# ============================================
+# 브랜드별 필터 설정 (platform/filters.yaml 기본값 오버라이드)
+
+filters:
+  # 전역 활성화
+  enabled: true
+
+  # Quality Filter
+  quality:
+    enabled: true
+    min_score: 0.5
+    min_length: 20
+    optimal_min_length: 50
+
+  # Trust Filter
+  trust:
+    enabled: true
+    min_score: 0.5
+    hallucination_threshold: 0.3
+
+  # Relevance Filter
+  relevance:
+    enabled: true
+    min_score: 0.5
+
+  # Validation Filter (종합)
+  validation:
+    enabled: true
+    pass_threshold: 0.7
+
+# ============================================
+# Feature-specific Settings
+# ============================================
+# 각 feature에 대한 추가 설정
+
+factual:
+  # 필터 오버라이드
+  quality_filter_enabled: true
+  trust_filter_enabled: true
+  min_quality_score: 0.6
+  min_trust_score: 0.7
+
+conversational:
+  # 필터 오버라이드
+  quality_filter_enabled: true
+  trust_filter_enabled: true
+  min_quality_score: 0.4
+  min_trust_score: 0.4

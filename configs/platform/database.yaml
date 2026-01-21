@@ -1,0 +1,53 @@
+### **configs/platform/database.yaml**
+
+# ============================================
+# Database Configuration
+# ============================================
+
+neo4j:
+  # 연결 설정
+  connection:
+    max_connection_lifetime: 3600
+    max_connection_pool_size: 50
+    connection_timeout: 30
+    
+  # 쿼리 설정
+  query:
+    timeout: 30
+    max_retries: 3
+    
+  # 인덱스 자동 생성
+  auto_create_indexes: true
+  
+  # 필수 인덱스 목록
+  required_indexes:
+    - "Post.brand_id"
+    - "Concept.brand_id"
+    - "Product.brand_id"
+    - "Post.likes"
+    - "Post.created_at"
+    
+  # 제약 조건
+  constraints:
+    - "Post.id UNIQUE"
+    - "Concept.id UNIQUE"
+    - "Product.id UNIQUE"
+
+# ============================================
+# Vector Index Configuration
+# ============================================
+vector:
+  # 기본 인덱스명
+  default_index_name: "ontix_global_concept_index"
+  
+  # 벡터 차원
+  dimensions: 1536
+  
+  # 유사도 메트릭
+  similarity_metric: "cosine"
+  
+  # 검색 설정
+  search:
+    default_top_k: 10
+    min_score: 0.7
+    max_results: 50

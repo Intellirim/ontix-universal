@@ -1,0 +1,72 @@
+### **configs/platform/core.yaml**
+
+# ============================================
+# ONTIX Universal Platform - Core Configuration
+# ============================================
+
+platform:
+  name: "ONTIX Universal"
+  version: "1.0.0"
+  environment: "production"
+
+# ============================================
+# Routing Configuration
+# ============================================
+routing:
+  # LLM 기반 질문 분류 사용 여부
+  use_llm_classification: false
+  
+  # 기본 폴백 질문 타입
+  default_question_type: "conversational"
+  
+  # 질문 타입별 우선순위
+  priority:
+    - product_recommendation
+    - analytics
+    - advisor
+    - factual
+    - conversational
+
+# ============================================
+# Pipeline Configuration
+# ============================================
+pipeline:
+  # 최대 검색 결과 수
+  max_retrieval_results: 50
+  
+  # 검색 타임아웃 (초)
+  retrieval_timeout: 10
+  
+  # 생성 타임아웃 (초)
+  generation_timeout: 30
+  
+  # 재시도 설정
+  retry:
+    max_attempts: 3
+    delay_seconds: 1
+
+# ============================================
+# Performance Settings
+# ============================================
+performance:
+  # 캐시 사용
+  enable_cache: true
+  
+  # 병렬 처리
+  enable_parallel_retrieval: false
+  
+  # 최대 동시 요청
+  max_concurrent_requests: 100
+
+# ============================================
+# Monitoring
+# ============================================
+monitoring:
+  # 분석 추적
+  enable_analytics: true
+  
+  # 상세 로깅
+  verbose_logging: false
+  
+  # 성능 메트릭
+  track_performance: true

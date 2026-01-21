@@ -1,0 +1,46 @@
+### **configs/platform/llm.yaml**
+
+# ============================================
+# LLM Configuration
+# ============================================
+
+models:
+  # Mini 모델 (빠르고 저렴)
+  mini:
+    model: "gpt-5-mini"
+    temperature: 0
+    max_tokens: 1000
+    
+  # Full 모델 (밸런스)
+  full:
+    model: "-mini"
+    temperature: 0.7
+    max_tokens: 2000
+    
+  # Creative 모델 (창의성)
+  creative:
+    model: "gpt-5-mini"
+    temperature: 0.9
+    max_tokens: 3000
+    
+  # Precise 모델 (정확성)
+  precise:
+    model: "gpt-5-mini"
+    temperature: 0
+    max_tokens: 4000
+
+# ============================================
+# Embedding Configuration
+# ============================================
+embedding:
+  model: "text-embedding-3-small"
+  dimensions: 1536
+  batch_size: 100
+
+# ============================================
+# Request Settings
+# ============================================
+requests:
+  timeout: 60
+  max_retries: 3
+  retry_delay: 1
