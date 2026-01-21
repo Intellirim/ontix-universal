@@ -1,0 +1,20 @@
+brand:
+  id: ontix-intelligence
+  name: ontix intelligence
+  description: 소규모 브랜드, 기업을 대상으로 데이터 통합 솔루션을 제공한다.
+  industry: 데이터 통합 솔루션
+features: []
+neo4j:
+  brand_id: ontix-intelligence
+  namespaces:
+  - ontix-intelligence
+retrieval:
+  default_top_k: 5
+  sources:
+  - neo4j_products
+  - vector
+generation:
+  default:
+    model: gpt-5-mini
+    temperature: 0.7
+    max_tokens: 1000

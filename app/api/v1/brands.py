@@ -189,6 +189,26 @@ async def validate_brand(brand_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/{brand_id}/graph-summary")
+async def get_brand_graph_summary(brand_id: str):
+    """
+    브랜드 그래프 요약 조회
+
+    Args:
+        brand_id: 브랜드 ID
+
+    Returns:
+        그래프 요약 (노드/관계 수, 타입별 통계, 주요 컨셉 등)
+    """
+    try:
+        repo = Neo4jRepository()
+        result = repo.get_brand_graph_summary(brand_id)
+        return result
+    except Exception as e:
+        logger.error(f"Get brand graph summary error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/{brand_id}/graph")
 async def get_brand_graph(
     brand_id: str,
