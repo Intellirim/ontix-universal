@@ -21,6 +21,82 @@ logger = logging.getLogger(__name__)
 
 
 # ============================================================
+# Default Retrieval Configuration (자동 적용)
+# ============================================================
+# 새 브랜드 생성 시 또는 기존 브랜드에 retrieval 설정이 없을 때 자동 적용됨
+
+DEFAULT_RETRIEVAL_CONFIG = {
+    "default_top_k": 10,
+    "sources": ["graph", "vector"],
+
+    # 대화형 질문 - graph 필수!
+    "conversational": {
+        "retrievers": ["graph"],
+        "max_results": 10,
+    },
+
+    # 사실 확인 질문
+    "factual": {
+        "retrievers": ["graph", "vector"],
+        "max_results": 10,
+    },
+
+    # 인사말 - retrieval 불필요
+    "greeting": {
+        "retrievers": [],
+    },
+
+    # 제품 추천
+    "product_recommendation": {
+        "retrievers": ["graph", "product"],
+    },
+
+    # 분석 질문
+    "analytics": {
+        "retrievers": ["graph", "stats"],
+    },
+}
+
+
+DEFAULT_GENERATION_CONFIG = {
+    "default": {
+        "model": "gpt-5-mini",
+        "temperature": 0.7,
+        "max_tokens": 1000,
+    },
+    "conversational": {
+        "fallback_prompt": "shared/conversational/base.txt",
+        "temperature": 0.7,
+        "max_tokens": 1500,
+    },
+    "factual": {
+        "fallback_prompt": "shared/factual/base.txt",
+        "temperature": 0.3,
+        "max_tokens": 1000,
+    },
+}
+
+
+def _deep_merge_retrieval(base: dict, override: dict) -> dict:
+    """
+    retrieval 설정을 깊은 병합
+    - override에 있는 값은 유지
+    - override에 없는 값은 base에서 가져옴
+    """
+    result = base.copy()
+
+    for key, value in override.items():
+        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+            # dict인 경우 재귀적으로 병합
+            result[key] = _deep_merge_retrieval(result[key], value)
+        else:
+            # 아니면 override 값 사용
+            result[key] = value
+
+    return result
+
+
+# ============================================================
 # Enums
 # ============================================================
 
@@ -271,6 +347,11 @@ class ConfigManager:
                 "\n".join(f"  - {e}" for e in errors)
             )
 
+        # =============================================
+        # 자동 기본값 적용 (retrieval 설정)
+        # =============================================
+        config = cls._apply_retrieval_defaults(config, brand_id)
+
         # 캐시 저장
         cls._cache[cache_key] = ConfigEntry(
             config=config,
@@ -281,6 +362,44 @@ class ConfigManager:
 
         cls._metrics.record_load(from_cache=False)
         logger.info(f"Loaded config for brand: {brand_id}")
+
+        return config
+
+    # --------------------------------------------------
+    # Auto-apply Defaults
+    # --------------------------------------------------
+
+    @classmethod
+    def _apply_retrieval_defaults(cls, config: Dict, brand_id: str) -> Dict:
+        """
+        retrieval/generation 설정이 없거나 불완전한 경우 기본값 자동 적용
+
+        이 메서드를 통해 새 브랜드가 추가되어도 설정 누락으로 인한
+        Neo4j 검색 실패나 generation 오류가 발생하지 않음
+        """
+        # ====== Retrieval 기본값 적용 ======
+        if "retrieval" not in config:
+            config["retrieval"] = DEFAULT_RETRIEVAL_CONFIG.copy()
+            logger.info(f"[{brand_id}] Applied complete default retrieval config")
+        else:
+            original = config["retrieval"]
+            config["retrieval"] = _deep_merge_retrieval(DEFAULT_RETRIEVAL_CONFIG, original)
+
+            added_keys = set(config["retrieval"].keys()) - set(original.keys())
+            if added_keys:
+                logger.info(f"[{brand_id}] Auto-added retrieval defaults: {added_keys}")
+
+        # ====== Generation 기본값 적용 ======
+        if "generation" not in config:
+            config["generation"] = DEFAULT_GENERATION_CONFIG.copy()
+            logger.info(f"[{brand_id}] Applied complete default generation config")
+        else:
+            original = config["generation"]
+            config["generation"] = _deep_merge_retrieval(DEFAULT_GENERATION_CONFIG, original)
+
+            added_keys = set(config["generation"].keys()) - set(original.keys())
+            if added_keys:
+                logger.info(f"[{brand_id}] Auto-added generation defaults: {added_keys}")
 
         return config
 
@@ -428,17 +547,10 @@ class ConfigManager:
                 "brand_id": brand_data.get("neo4j_brand_id") or brand_id,
                 "namespaces": brand_data.get("neo4j_namespaces") or [brand_id],
             },
-            "retrieval": {
-                "default_top_k": 5,
-                "sources": ["neo4j_products", "vector"],
-            },
-            "generation": {
-                "default": {
-                    "model": "gpt-5-mini",
-                    "temperature": 0.7,  # GPT-5에서는 무시됨
-                    "max_tokens": 1000,
-                },
-            },
+            # 완전한 기본 retrieval 설정 자동 적용
+            "retrieval": DEFAULT_RETRIEVAL_CONFIG.copy(),
+            # 완전한 기본 generation 설정 자동 적용
+            "generation": DEFAULT_GENERATION_CONFIG.copy(),
         }
 
         # 디렉토리 확인
