@@ -23,9 +23,9 @@ models:
     temperature: 0.9
     max_tokens: 3000
 
-  # Feature 모델 (AI Advisor, 콘텐츠 생성) - 고품질
+  # Feature 모델 (AI Advisor, 콘텐츠 생성) - 속도 최적화
   feature:
-    model: "gpt-5"
+    model: "gpt-5-mini"
     temperature: 0.7
     max_tokens: 4000
 
