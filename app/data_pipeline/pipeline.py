@@ -768,13 +768,26 @@ class SaveStageExecutor(BaseStageExecutor):
                 items_processed=0,
             )
 
+        # 1. Content 노드 저장 (원본 콘텐츠 + 메트릭스)
+        content_saved = 0
+        if ctx.filtered_contents:
+            logger.info(f"[save] Saving {len(ctx.filtered_contents)} Content nodes with metrics...")
+            for content in ctx.filtered_contents:
+                try:
+                    await self.neo4j_repo.create_content(content, ctx.brand_id)
+                    content_saved += 1
+                except Exception as e:
+                    logger.warning(f"  Content save failed for {content.content_id}: {e}")
+            logger.info(f"[save] Content nodes saved: {content_saved}/{len(ctx.filtered_contents)}")
+
+        # 2. Graph 결과 저장 (Concept 노드 등)
         if not ctx.graph_results:
             logger.warning("[save] No graph results to save")
             return StageResult(
                 stage=self.stage,
                 success=True,
-                duration_seconds=0,
-                items_processed=0,
+                duration_seconds=time.time() - start_time,
+                items_processed=content_saved,
             )
 
         save_results = []
@@ -812,13 +825,13 @@ class SaveStageExecutor(BaseStageExecutor):
         total_nodes = sum(r.get("nodes_created", 0) + r.get("nodes_updated", 0) for r in save_results)
         total_rels = sum(r.get("relationships_created", 0) for r in save_results)
 
-        logger.info(f"[save] Total saved: {total_nodes} nodes, {total_rels} relationships")
+        logger.info(f"[save] Total saved: {total_nodes} nodes, {total_rels} relationships, {content_saved} contents")
 
         return StageResult(
             stage=self.stage,
             success=all(r.get("success", False) for r in save_results),
             duration_seconds=duration,
-            items_processed=len(ctx.graph_results),
+            items_processed=len(ctx.graph_results) + content_saved,
         )
 
 

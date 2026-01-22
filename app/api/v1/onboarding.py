@@ -160,13 +160,15 @@ async def get_onboarding_status(brand_id: str):
         if post_count and post_count[0].get('count', 0) > 0:
             step4_completed.append('소셜 데이터')
 
-        # 채팅 세션 체크
-        session_count = neo4j.query(
-            "MATCH (s:ChatSession) WHERE s.brand_id = $brand_id RETURN count(s) as count",
-            {'brand_id': brand_id}
-        )
-        if session_count and session_count[0].get('count', 0) > 0:
-            step4_completed.append('채팅 연동')
+        # 채팅 세션 체크 (PostgreSQL)
+        try:
+            from app.services.chat.chat_storage import get_chat_storage
+            storage = get_chat_storage()
+            sessions = storage.list_sessions(brand_id=brand_id, limit=1)
+            if sessions:
+                step4_completed.append('채팅 연동')
+        except Exception:
+            pass  # 채팅 저장소 오류 시 무시
 
         # 분석 활성화 체크
         if 'analytics' in brand_config.get('features', []):
