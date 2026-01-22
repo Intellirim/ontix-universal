@@ -29,9 +29,9 @@ DEFAULT_RETRIEVAL_CONFIG = {
     "default_top_k": 10,
     "sources": ["graph", "vector"],
 
-    # 대화형 질문 - graph 필수!
+    # 대화형 질문 - graph + vector로 더 나은 검색
     "conversational": {
-        "retrievers": ["graph"],
+        "retrievers": ["graph", "vector"],
         "max_results": 10,
     },
 
@@ -74,6 +74,14 @@ DEFAULT_GENERATION_CONFIG = {
         "temperature": 0.3,
         "max_tokens": 1000,
     },
+}
+
+
+DEFAULT_PIPELINE_CONFIG = {
+    "retrieval_mode": "parallel",
+    "max_parallel_retrievers": 4,
+    "retrieval_timeout": 5.0,
+    "generation_timeout": 20.0,
 }
 
 
@@ -400,6 +408,14 @@ class ConfigManager:
             added_keys = set(config["generation"].keys()) - set(original.keys())
             if added_keys:
                 logger.info(f"[{brand_id}] Auto-added generation defaults: {added_keys}")
+
+        # ====== Pipeline 기본값 적용 (병렬 retrieval 등) ======
+        if "pipeline" not in config:
+            config["pipeline"] = DEFAULT_PIPELINE_CONFIG.copy()
+            logger.info(f"[{brand_id}] Applied default pipeline config (parallel retrieval)")
+        else:
+            original = config["pipeline"]
+            config["pipeline"] = {**DEFAULT_PIPELINE_CONFIG, **original}
 
         return config
 

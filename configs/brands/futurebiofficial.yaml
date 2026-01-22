@@ -1,17 +1,14 @@
 brand:
   id: futurebiofficial
-  name: 퓨처바이오피셜
-  description: 안이테이징을 대중화시켜 모두의 노화를 느리게 한다.
+  name: futurebiofficial
+  description: 안티에이징을 통해 인류를 구원한다.
   industry: 안티에이징
-features:
-- chat
-- validation
-- advisor
-- analytics
-- product_recommendation
-- content_generation
-- social_monitoring
-- onboarding
+features: []
+pipeline:
+  retrieval_mode: parallel
+  max_parallel_retrievers: 4
+  retrieval_timeout: 10.0
+  generation_timeout: 20.0
 neo4j:
   brand_id: futurebiofficial
   namespaces:
@@ -21,14 +18,16 @@ retrieval:
   sources:
   - graph
   - vector
-  # question_type별 retriever 설정 - 모든 타입에서 graph 사용
   conversational:
     retrievers:
     - graph
+    - vector
+    max_results: 10
   factual:
     retrievers:
     - graph
     - vector
+    max_results: 10
   greeting:
     retrievers: []
   product_recommendation:
@@ -41,8 +40,8 @@ retrieval:
     - stats
 generation:
   default:
-    model: gpt-5-mini
-    temperature: 0.7  # GPT-5에서는 무시됨
+    model: gpt-4o-mini
+    temperature: 0.7
     max_tokens: 1000
   conversational:
     fallback_prompt: shared/conversational/base.txt

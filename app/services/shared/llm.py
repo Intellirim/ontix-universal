@@ -73,7 +73,7 @@ class ModelConfig:
 class LLMConfig:
     """LLM 클라이언트 설정"""
     api_key: str
-    default_model: str = "gpt-5-mini"
+    default_model: str = "gpt-4o-mini"
     provider: ModelProvider = ModelProvider.OPENAI
     enable_cost_tracking: bool = True
     enable_rate_limiting: bool = True
@@ -96,7 +96,7 @@ class LLMConfig:
 
         return cls(
             api_key=api_key,
-            default_model=os.getenv("OPENAI_DEFAULT_MODEL", "gpt-5-mini"),
+            default_model=os.getenv("OPENAI_DEFAULT_MODEL", "gpt-4o-mini"),
             enable_cost_tracking=os.getenv("LLM_COST_TRACKING", "true").lower() == "true",
             rate_limit_rpm=int(os.getenv("LLM_RATE_LIMIT_RPM", "60")),
         )
@@ -244,7 +244,7 @@ class LLMRateLimiter:
 class TokenCounter:
     """토큰 카운터"""
 
-    def __init__(self, model: str = "gpt-5-mini"):
+    def __init__(self, model: str = "gpt-4o-mini"):
         self.model = model
         self._encoder = None
 
@@ -332,23 +332,23 @@ class LLMClient:
     _instance: Optional['LLMClient'] = None
     _lock = threading.Lock()
 
-    # 모델 설정 - GPT-5-mini 기본 사용
+    # 모델 설정 - GPT-4o-mini 사용 (gpt-5-mini가 빈 응답 반환 이슈)
     MODEL_CONFIGS = {
         ModelVariant.MINI: ModelConfig(
-            model_name="gpt-5-mini",
-            temperature=0,  # GPT-5에서는 무시됨
+            model_name="gpt-4o-mini",
+            temperature=0.7,
             max_tokens=1000,
             input_price=0.150,
             output_price=0.600,
-            supports_sampling_params=False,  # GPT-5는 temperature/top_p 미지원
+            supports_sampling_params=True,
         ),
         ModelVariant.FULL: ModelConfig(
-            model_name="gpt-5-mini",
-            temperature=0.7,  # GPT-5에서는 무시됨
+            model_name="gpt-4o-mini",
+            temperature=0.7,
             max_tokens=2000,
             input_price=0.150,
             output_price=0.600,
-            supports_sampling_params=False,  # GPT-5는 temperature/top_p 미지원
+            supports_sampling_params=True,
         ),
         ModelVariant.CREATIVE: ModelConfig(
             model_name="gpt-5-mini",
@@ -366,14 +366,14 @@ class LLMClient:
             output_price=10.00,
             supports_sampling_params=True,  # GPT-4o는 sampling params 지원
         ),
-        # GPT-5-mini: Feature 핸들러용 (temperature/top_p 지원 안함)
+        # GPT-5: Feature 핸들러용 (AI Advisor, 콘텐츠 생성 등 중요 기능)
         ModelVariant.FEATURE: ModelConfig(
-            model_name="gpt-5-mini",
-            temperature=1.0,  # GPT-5는 기본값만 사용
-            max_tokens=2000,
-            input_price=0.150,
-            output_price=0.600,
-            supports_sampling_params=False,  # 중요: sampling params 비활성화
+            model_name="gpt-5",
+            temperature=0.7,
+            max_tokens=3000,
+            input_price=1.00,
+            output_price=3.00,
+            supports_sampling_params=False,  # GPT-5는 sampling params 비활성화
         ),
     }
 

@@ -445,6 +445,14 @@ class GraphRetriever(RetrieverInterface):
                 logger.info(f"Detected platforms: {detected_platforms}")
                 self.graph_config.platforms = detected_platforms
 
+            # 도메인 키워드 폴백: 추출된 키워드 중 도메인 키워드가 없으면 상위 도메인 키워드 추가
+            domain_matched = [kw for kw in keywords if kw.lower() in self.domain_keywords]
+            if not domain_matched and self.domain_keywords:
+                # 상위 5개 도메인 키워드를 폴백으로 추가
+                fallback_keywords = list(self.domain_keywords)[:5]
+                keywords = keywords + fallback_keywords
+                logger.info(f"Added domain keyword fallback: {fallback_keywords}")
+
             if not keywords and not detected_platforms:
                 logger.warning("No keywords or platforms extracted from question")
                 return RetrievalResult(source='graph_search', items=[])

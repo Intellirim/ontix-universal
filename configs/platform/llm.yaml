@@ -5,28 +5,28 @@
 # ============================================
 
 models:
-  # Mini 모델 (빠르고 저렴)
+  # Mini 모델 (빠르고 저렴) - 일반 챗봇용
   mini:
-    model: "gpt-5-mini"
-    temperature: 0
+    model: "gpt-4o-mini"
+    temperature: 0.7
     max_tokens: 1000
-    
-  # Full 모델 (밸런스)
+
+  # Full 모델 (밸런스) - 일반 챗봇용
   full:
-    model: "-mini"
+    model: "gpt-4o-mini"
     temperature: 0.7
     max_tokens: 2000
-    
+
   # Creative 모델 (창의성)
   creative:
-    model: "gpt-5-mini"
+    model: "gpt-4o-mini"
     temperature: 0.9
     max_tokens: 3000
-    
-  # Precise 모델 (정확성)
-  precise:
-    model: "gpt-5-mini"
-    temperature: 0
+
+  # Feature 모델 (AI Advisor, 콘텐츠 생성) - 고품질
+  feature:
+    model: "gpt-5"
+    temperature: 0.7
     max_tokens: 4000
 
 # ============================================
