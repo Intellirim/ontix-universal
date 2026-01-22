@@ -56,6 +56,88 @@ class SearchResult:
     related_nodes: List[Dict[str, Any]] = field(default_factory=list)
 
 
+class BrandKeywordCache:
+    """브랜드별 도메인 키워드 캐시"""
+
+    _cache: Dict[str, Set[str]] = {}
+    _cache_ttl: Dict[str, datetime] = {}
+    _ttl_minutes: int = 30  # 캐시 유효 시간
+
+    @classmethod
+    def get_domain_keywords(cls, brand_id: str, neo4j_client=None) -> Set[str]:
+        """
+        브랜드별 도메인 키워드 조회 (Neo4j Concept 노드에서 추출)
+
+        Args:
+            brand_id: 브랜드 ID
+            neo4j_client: Neo4j 클라이언트 (없으면 자동 생성)
+
+        Returns:
+            도메인 키워드 Set
+        """
+        # 캐시 확인
+        if brand_id in cls._cache:
+            cache_time = cls._cache_ttl.get(brand_id)
+            if cache_time and datetime.now() - cache_time < timedelta(minutes=cls._ttl_minutes):
+                return cls._cache[brand_id]
+
+        # Neo4j에서 Concept 노드의 키워드 추출
+        keywords = set()
+        try:
+            if neo4j_client is None:
+                neo4j_client = get_neo4j_client()
+
+            # Concept 노드의 id와 description에서 키워드 추출
+            query = """
+            MATCH (c:Concept)
+            WHERE c.brand_id = $brand_id
+            RETURN c.id as id, c.description as description, c.type as type
+            LIMIT 100
+            """
+            results = neo4j_client.query(query, {'brand_id': brand_id})
+
+            for r in results:
+                # Concept ID를 키워드로 추가 (소문자로)
+                concept_id = r.get('id', '')
+                if concept_id:
+                    # 공백으로 분리된 단어들도 추가
+                    for word in concept_id.lower().split():
+                        if len(word) >= 2:
+                            keywords.add(word)
+                    # 전체 ID도 추가
+                    keywords.add(concept_id.lower())
+
+                # description에서 주요 단어 추출
+                desc = r.get('description', '')
+                if desc:
+                    # 한글, 영어 단어 추출
+                    words = re.findall(r'[가-힣]+|[a-zA-Z]+', desc.lower())
+                    for word in words:
+                        if len(word) >= 2:
+                            keywords.add(word)
+
+            logger.info(f"Loaded {len(keywords)} domain keywords for brand '{brand_id}'")
+
+        except Exception as e:
+            logger.warning(f"Failed to load domain keywords for {brand_id}: {e}")
+
+        # 캐시 저장
+        cls._cache[brand_id] = keywords
+        cls._cache_ttl[brand_id] = datetime.now()
+
+        return keywords
+
+    @classmethod
+    def clear_cache(cls, brand_id: str = None):
+        """캐시 클리어"""
+        if brand_id:
+            cls._cache.pop(brand_id, None)
+            cls._cache_ttl.pop(brand_id, None)
+        else:
+            cls._cache.clear()
+            cls._cache_ttl.clear()
+
+
 class KeywordExtractor:
     """의미 기반 키워드 추출"""
 
@@ -85,29 +167,91 @@ class KeywordExtractor:
         'then', 'once', 'here', 'there', 'when', 'where', 'why', 'how',
     }
 
-    # 도메인 특화 키워드 (스킨케어/뷰티)
-    DOMAIN_KEYWORDS: Set[str] = {
+    # 기본 도메인 키워드 (fallback)
+    DEFAULT_DOMAIN_KEYWORDS: Set[str] = {
         '피부', '스킨케어', '보습', '수분', '세럼', '크림', '토너', '클렌저',
-        '선크림', '자외선', 'spf', '여드름', '트러블', '모공', '주름', '탄력',
-        '미백', '브라이트닝', '각질', '필링', '마스크팩', '앰플', '에센스',
-        '성분', '히알루론산', '나이아신아마이드', '레티놀', '비타민c', 'aha', 'bha',
-        '민감성', '지성', '건성', '복합성', '피부타입', '루틴', '순서',
+        '데이터', '통합', '솔루션', 'api', '분석', '인사이트', '대시보드',
+    }
+
+    # 플랫폼 키워드 매핑
+    PLATFORM_KEYWORDS: Dict[str, str] = {
+        '인스타': 'instagram',
+        '인스타그램': 'instagram',
+        'instagram': 'instagram',
+        'insta': 'instagram',
+        '유튜브': 'youtube',
+        'youtube': 'youtube',
+        '틱톡': 'tiktok',
+        'tiktok': 'tiktok',
+        '트위터': 'twitter',
+        'twitter': 'twitter',
+        '페이스북': 'facebook',
+        'facebook': 'facebook',
+        '블로그': 'blog',
+        'blog': 'blog',
+    }
+
+    # 한국어-영어 브랜드명/키워드 매핑
+    KEYWORD_MAPPINGS: Dict[str, str] = {
+        '온틱스': 'ontix',
+        '퓨처비': 'futurebi',
+        '퓨쳐비': 'futurebi',
+        '스킨케어': 'skincare',
+        '브랜드': 'brand',
+        '콘텐츠': 'content',
+        '내용': 'content',
+        '게시물': 'post',
+        '포스트': 'post',
+        '피드': 'feed',
+    }
+
+    # 추가 불용어 (쿼리에서 제외할 단어)
+    QUERY_STOPWORDS: Set[str] = {
+        '알려줘', '알려', '보여줘', '보여', '뭐야', '뭐', '무엇', '어떤',
+        '좀', '해줘', '줘', '주세요', '해', '실제', '진짜', '정말',
     }
 
     @classmethod
-    def extract(cls, text: str, max_keywords: int = 10) -> List[str]:
+    def detect_platforms(cls, text: str) -> List[str]:
+        """
+        텍스트에서 플랫폼 언급 감지
+
+        Args:
+            text: 입력 텍스트
+
+        Returns:
+            감지된 플랫폼 리스트
+        """
+        if not text:
+            return []
+
+        text_lower = text.lower()
+        platforms = []
+
+        for keyword, platform in cls.PLATFORM_KEYWORDS.items():
+            if keyword in text_lower and platform not in platforms:
+                platforms.append(platform)
+
+        return platforms
+
+    @classmethod
+    def extract(cls, text: str, max_keywords: int = 10, domain_keywords: Set[str] = None) -> List[str]:
         """
         텍스트에서 의미 있는 키워드 추출
 
         Args:
             text: 입력 텍스트
             max_keywords: 최대 키워드 수
+            domain_keywords: 브랜드별 도메인 키워드 (없으면 기본값 사용)
 
         Returns:
             키워드 리스트 (중요도 순)
         """
         if not text:
             return []
+
+        # 도메인 키워드 설정
+        active_domain_keywords = domain_keywords or cls.DEFAULT_DOMAIN_KEYWORDS
 
         # 소문자 변환
         text_lower = text.lower()
@@ -124,33 +268,41 @@ class KeywordExtractor:
             if len(token) < 2:
                 continue
 
+            # 쿼리 불용어 제외
+            if token in cls.QUERY_STOPWORDS:
+                continue
+
             # 불용어 제외
             if token in cls.KOREAN_STOPWORDS or token in cls.ENGLISH_STOPWORDS:
                 continue
 
-            # 중복 제외
-            if token in seen:
+            # 한국어-영어 매핑 적용
+            mapped_token = cls.KEYWORD_MAPPINGS.get(token, token)
+
+            # 중복 제외 (매핑된 토큰 기준)
+            if mapped_token in seen:
                 continue
 
-            seen.add(token)
+            seen.add(mapped_token)
 
             # 도메인 키워드는 높은 우선순위
-            if token in cls.DOMAIN_KEYWORDS:
-                keywords.insert(0, token)
+            if mapped_token in active_domain_keywords:
+                keywords.insert(0, mapped_token)
             else:
-                keywords.append(token)
+                keywords.append(mapped_token)
 
         return keywords[:max_keywords]
 
     @classmethod
-    def extract_with_scores(cls, text: str, max_keywords: int = 10) -> List[tuple]:
+    def extract_with_scores(cls, text: str, max_keywords: int = 10, domain_keywords: Set[str] = None) -> List[tuple]:
         """키워드와 점수 함께 추출"""
-        keywords = cls.extract(text, max_keywords * 2)
+        active_domain_keywords = domain_keywords or cls.DEFAULT_DOMAIN_KEYWORDS
+        keywords = cls.extract(text, max_keywords * 2, domain_keywords)
 
         scored = []
         for i, kw in enumerate(keywords):
             # 도메인 키워드는 높은 점수
-            if kw in cls.DOMAIN_KEYWORDS:
+            if kw in active_domain_keywords:
                 score = 1.0
             else:
                 # 위치 기반 점수 (앞에 나올수록 높음)
@@ -175,6 +327,12 @@ class GraphRetriever(RetrieverInterface):
         self.neo4j = get_neo4j_client()
         self.graph_config = GraphSearchConfig()
 
+        # 브랜드별 도메인 키워드 로드 (Neo4j Concept 노드에서 자동 추출)
+        self.domain_keywords = BrandKeywordCache.get_domain_keywords(
+            self.brand_id, self.neo4j
+        )
+        logger.info(f"Loaded {len(self.domain_keywords)} domain keywords for brand '{self.brand_id}'")
+
     def _do_retrieve(self, context: QueryContext) -> RetrievalResult:
         """
         그래프 검색 실행 (추상 메소드 구현)
@@ -187,22 +345,31 @@ class GraphRetriever(RetrieverInterface):
         """
         try:
             question = context.question
-            keywords = KeywordExtractor.extract(question)
 
-            if not keywords:
-                logger.warning("No keywords extracted from question")
+            # 브랜드별 도메인 키워드를 사용하여 키워드 추출
+            keywords = KeywordExtractor.extract(question, domain_keywords=self.domain_keywords)
+
+            # 플랫폼 감지
+            detected_platforms = KeywordExtractor.detect_platforms(question)
+            if detected_platforms:
+                logger.info(f"Detected platforms: {detected_platforms}")
+                self.graph_config.platforms = detected_platforms
+
+            if not keywords and not detected_platforms:
+                logger.warning("No keywords or platforms extracted from question")
                 return RetrievalResult(source='graph_search', items=[])
 
-            logger.info(f"Graph search keywords: {keywords}")
+            logger.info(f"Graph search keywords: {keywords}, platforms: {detected_platforms}")
 
             results = []
 
-            # 1. Concept 검색
-            concepts = self._search_concepts(keywords)
-            results.extend(concepts)
+            # 1. Concept 검색 (플랫폼이 감지되지 않은 경우에만)
+            if not detected_platforms:
+                concepts = self._search_concepts(keywords)
+                results.extend(concepts)
 
-            # 2. Content 검색
-            contents = self._search_contents(keywords)
+            # 2. Content 검색 (플랫폼 필터 적용)
+            contents = self._search_contents(keywords, detected_platforms)
             results.extend(contents)
 
             # 3. 관계 기반 확장 검색
@@ -289,8 +456,8 @@ class GraphRetriever(RetrieverInterface):
             for r in results
         ]
 
-    def _search_contents(self, keywords: List[str]) -> List[SearchResult]:
-        """Content 노드 검색"""
+    def _search_contents(self, keywords: List[str], platforms: List[str] = None) -> List[SearchResult]:
+        """Content 노드 검색 (플랫폼 기반 검색 지원)"""
         if self.graph_config.scope not in [SearchScope.CONTENTS, SearchScope.ALL]:
             return []
 
@@ -301,17 +468,29 @@ class GraphRetriever(RetrieverInterface):
 
         # 플랫폼 필터 조건
         platform_filter = ""
-        if self.graph_config.platforms:
+        use_platforms = platforms or self.graph_config.platforms
+        if use_platforms:
             platform_filter = "AND c.platform IN $platforms"
+
+        # 키워드 필터 조건 (플랫폼이 지정된 경우 선택적)
+        if keywords:
+            keyword_filter = "AND any(kw IN $keywords WHERE toLower(coalesce(c.text, '')) CONTAINS kw)"
+            score_calc = "size([kw IN $keywords WHERE toLower(coalesce(c.text, '')) CONTAINS kw])"
+        elif use_platforms:
+            # 플랫폼만 지정된 경우 - 키워드 필터 없이 플랫폼의 모든 콘텐츠 검색
+            keyword_filter = ""
+            score_calc = "1"  # 기본 점수
+        else:
+            return []
 
         query = f"""
         MATCH (c:Content)
         WHERE c.brand_id = $brand_id
-          AND any(kw IN $keywords WHERE toLower(coalesce(c.text, '')) CONTAINS kw)
+          {keyword_filter}
           {time_filter}
           {platform_filter}
         WITH c,
-             size([kw IN $keywords WHERE toLower(coalesce(c.text, '')) CONTAINS kw]) as match_score
+             {score_calc} as match_score
         RETURN c.id as id,
                c.text as text,
                c.url as url,
@@ -322,19 +501,20 @@ class GraphRetriever(RetrieverInterface):
                c.view_count as views,
                c.created_at as created_at,
                match_score + (coalesce(c.like_count, 0) / 1000.0) as score
-        ORDER BY score DESC
+        ORDER BY score DESC, c.created_at DESC
         LIMIT $limit
         """
 
         params = {
             'brand_id': self.brand_id,
-            'keywords': keywords,
             'limit': self.graph_config.max_results,
         }
+        if keywords:
+            params['keywords'] = keywords
         if self.graph_config.days_back:
             params['days_back'] = self.graph_config.days_back
-        if self.graph_config.platforms:
-            params['platforms'] = self.graph_config.platforms
+        if use_platforms:
+            params['platforms'] = use_platforms
 
         results = self.neo4j.query(query, params)
 

@@ -468,7 +468,7 @@ Response:"""
         return "\n".join(parts)
 
     def _format_context_info(self, context: QueryContext) -> str:
-        """컨텍스트 정보 포맷팅"""
+        """컨텍스트 정보 포맷팅 - Content 노드(실제 콘텐츠) 우선"""
         if not context.retrieval_results:
             return ""
 
@@ -476,7 +476,7 @@ Response:"""
         if total == 0:
             return ""
 
-        # 간단한 컨텍스트 요약 - data 또는 items 속성 확인
+        # 소스 목록
         sources = []
         for r in context.retrieval_results:
             items = getattr(r, 'items', None) or getattr(r, 'data', None)
@@ -486,27 +486,68 @@ Response:"""
         if not sources:
             return ""
 
-        # 실제 검색 결과 내용 포함
-        context_parts = [f"\nAvailable Context: {total} items from {', '.join(sources)}"]
-        context_parts.append("\nRelevant Information:")
+        # 결과를 Content와 Concept으로 분리
+        content_items = []  # 실제 SNS 포스트 등
+        concept_items = []  # 개념/설명
 
         for result in context.retrieval_results:
-            # data 또는 items 속성 확인
             items = getattr(result, 'items', None) or getattr(result, 'data', None) or []
-            if not items:
-                continue
-            for item in items[:5]:  # 각 소스에서 최대 5개
-                # 딕셔너리 또는 RetrievalItem 객체 처리
+            for item in items:
                 if isinstance(item, dict):
                     node_type = item.get('node_type', 'info')
-                    content = item.get('content', '')
+                    if node_type == 'Content':
+                        content_items.append(item)
+                    else:
+                        concept_items.append(item)
                 else:
                     node_type = getattr(item, 'node_type', 'info')
-                    content = getattr(item, 'content', '')
+                    if node_type == 'Content':
+                        content_items.append(item)
+                    else:
+                        concept_items.append(item)
+
+        # 포맷팅 시작
+        context_parts = [f"\n=== Retrieved Data ({total} items) ==="]
+
+        # Content 노드 (실제 SNS 콘텐츠) 먼저 - 더 많은 내용 포함
+        if content_items:
+            context_parts.append("\n## ACTUAL CONTENT (These are REAL posts - use them in your answer!):")
+            for i, item in enumerate(content_items[:6], 1):  # 최대 6개
+                if isinstance(item, dict):
+                    platform = item.get('metadata', {}).get('platform', '') or item.get('platform', '')
+                    url = item.get('metadata', {}).get('url', '') or item.get('url', '')
+                    text = item.get('content', '') or item.get('text', '')
+                else:
+                    platform = getattr(item, 'platform', '') or ''
+                    url = getattr(item, 'url', '')
+                    text = getattr(item, 'content', '') or getattr(item, 'text', '')
+
+                if text:
+                    # Content는 더 많은 내용 포함 (500자)
+                    text = text[:500] if len(text) > 500 else text
+                    platform_label = f"[{platform.upper()}]" if platform else "[POST]"
+                    context_parts.append(f"\n{i}. {platform_label}")
+                    if url:
+                        context_parts.append(f"   URL: {url}")
+                    context_parts.append(f"   Content: {text}")
+
+        # Concept 노드 (설명/개념)
+        if concept_items:
+            context_parts.append("\n## RELATED CONCEPTS:")
+            for item in concept_items[:4]:  # 최대 4개
+                if isinstance(item, dict):
+                    node_id = item.get('id', '')
+                    content = item.get('content', '') or item.get('description', '')
+                else:
+                    node_id = getattr(item, 'id', '')
+                    content = getattr(item, 'content', '') or getattr(item, 'description', '')
 
                 if content:
                     content = content[:200] if len(content) > 200 else content
-                    context_parts.append(f"- [{node_type}] {content}")
+                    context_parts.append(f"- {node_id}: {content}")
+
+        context_parts.append("\n=== End of Retrieved Data ===")
+        context_parts.append("\nIMPORTANT: Use the ACTUAL CONTENT above to answer. Do NOT make up fictional examples.")
 
         return "\n".join(context_parts)
 

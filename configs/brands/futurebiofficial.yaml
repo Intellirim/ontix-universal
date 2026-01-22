@@ -26,3 +26,11 @@ generation:
     model: gpt-5-mini
     temperature: 0.7  # GPT-5에서는 무시됨
     max_tokens: 1000
+  conversational:
+    fallback_prompt: shared/conversational/base.txt
+    temperature: 0.7
+    max_tokens: 1500
+  factual:
+    fallback_prompt: shared/factual/base.txt
+    temperature: 0.3
+    max_tokens: 1000

@@ -9,12 +9,34 @@ neo4j:
   namespaces:
   - ontix-intelligence
 retrieval:
-  default_top_k: 5
+  default_top_k: 10
   sources:
-  - neo4j_products
+  - graph
   - vector
+  # question_type별 retriever 설정
+  conversational:
+    retrievers:
+    - graph
+  factual:
+    retrievers:
+    - graph
+    - vector
+  greeting:
+    retrievers: []
+  product_recommendation:
+    retrievers:
+    - graph
+    - product
 generation:
   default:
     model: gpt-5-mini
     temperature: 0.7
+    max_tokens: 1000
+  conversational:
+    fallback_prompt: shared/conversational/base.txt
+    temperature: 0.7
+    max_tokens: 1500
+  factual:
+    fallback_prompt: shared/factual/base.txt
+    temperature: 0.3
     max_tokens: 1000
