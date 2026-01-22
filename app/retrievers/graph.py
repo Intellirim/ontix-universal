@@ -138,6 +138,81 @@ class BrandKeywordCache:
             cls._cache_ttl.clear()
 
 
+class BrandKeywordMappingCache:
+    """
+    브랜드별 한국어-영어 키워드 매핑 캐시
+
+    브랜드 config의 keyword_mappings를 읽어서 KeywordExtractor에 적용합니다.
+    새 브랜드 추가 시 config에 keyword_mappings를 추가하면 자동으로 적용됩니다.
+    """
+
+    _brand_mappings: Dict[str, Dict[str, str]] = {}
+    _loaded_brands: Set[str] = set()
+
+    @classmethod
+    def load_brand_mappings(cls, brand_id: str, brand_config: Dict) -> Dict[str, str]:
+        """
+        브랜드 config에서 키워드 매핑 로드
+
+        Args:
+            brand_id: 브랜드 ID
+            brand_config: 브랜드 설정 딕셔너리
+
+        Returns:
+            키워드 매핑 딕셔너리
+        """
+        if brand_id in cls._loaded_brands:
+            return cls._brand_mappings.get(brand_id, {})
+
+        # 브랜드 config에서 keyword_mappings 로드
+        brand_mappings = brand_config.get('keyword_mappings', {})
+
+        # 브랜드 이름도 자동으로 매핑에 추가
+        brand_name_kr = brand_config.get('brand', {}).get('name', '')
+        brand_name_id = brand_config.get('brand', {}).get('id', '')
+
+        if brand_name_kr and brand_name_id:
+            # 브랜드 이름의 다양한 변형을 ID로 매핑
+            brand_mappings[brand_name_kr.lower()] = brand_name_id.lower()
+
+        if brand_mappings:
+            cls._brand_mappings[brand_id] = brand_mappings
+            logger.info(f"Loaded {len(brand_mappings)} keyword mappings for brand '{brand_id}'")
+
+        cls._loaded_brands.add(brand_id)
+        return brand_mappings
+
+    @classmethod
+    def get_combined_mappings(cls, brand_id: str) -> Dict[str, str]:
+        """
+        기본 매핑 + 브랜드별 매핑 결합
+
+        Args:
+            brand_id: 브랜드 ID
+
+        Returns:
+            결합된 키워드 매핑
+        """
+        # 기본 매핑 복사
+        combined = dict(KeywordExtractor.KEYWORD_MAPPINGS)
+
+        # 브랜드별 매핑 추가 (덮어쓰기)
+        brand_mappings = cls._brand_mappings.get(brand_id, {})
+        combined.update(brand_mappings)
+
+        return combined
+
+    @classmethod
+    def clear_cache(cls, brand_id: str = None):
+        """캐시 클리어"""
+        if brand_id:
+            cls._brand_mappings.pop(brand_id, None)
+            cls._loaded_brands.discard(brand_id)
+        else:
+            cls._brand_mappings.clear()
+            cls._loaded_brands.clear()
+
+
 class KeywordExtractor:
     """의미 기반 키워드 추출"""
 
@@ -331,6 +406,11 @@ class GraphRetriever(RetrieverInterface):
         self.domain_keywords = BrandKeywordCache.get_domain_keywords(
             self.brand_id, self.neo4j
         )
+
+        # 브랜드별 키워드 매핑 로드 (config에서)
+        BrandKeywordMappingCache.load_brand_mappings(self.brand_id, brand_config)
+        self.keyword_mappings = BrandKeywordMappingCache.get_combined_mappings(self.brand_id)
+
         logger.info(f"Loaded {len(self.domain_keywords)} domain keywords for brand '{self.brand_id}'")
 
     def _do_retrieve(self, context: QueryContext) -> RetrievalResult:
@@ -348,6 +428,16 @@ class GraphRetriever(RetrieverInterface):
 
             # 브랜드별 도메인 키워드를 사용하여 키워드 추출
             keywords = KeywordExtractor.extract(question, domain_keywords=self.domain_keywords)
+
+            # 브랜드별 추가 키워드 매핑 적용
+            if self.keyword_mappings:
+                mapped_keywords = []
+                for kw in keywords:
+                    # 매핑이 있으면 적용
+                    mapped = self.keyword_mappings.get(kw.lower(), kw)
+                    if mapped not in mapped_keywords:
+                        mapped_keywords.append(mapped)
+                keywords = mapped_keywords
 
             # 플랫폼 감지
             detected_platforms = KeywordExtractor.detect_platforms(question)

@@ -17,10 +17,28 @@ neo4j:
   namespaces:
   - futurebiofficial
 retrieval:
-  default_top_k: 5
+  default_top_k: 10
   sources:
-  - neo4j_products
+  - graph
   - vector
+  # question_type별 retriever 설정 - 모든 타입에서 graph 사용
+  conversational:
+    retrievers:
+    - graph
+  factual:
+    retrievers:
+    - graph
+    - vector
+  greeting:
+    retrievers: []
+  product_recommendation:
+    retrievers:
+    - graph
+    - product
+  analytics:
+    retrievers:
+    - graph
+    - stats
 generation:
   default:
     model: gpt-5-mini

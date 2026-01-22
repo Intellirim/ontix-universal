@@ -2,6 +2,9 @@
 # ONTIX Universal - Brand Configuration Template
 # ============================================
 # 이 템플릿을 복사하여 새 브랜드 설정을 만드세요.
+#
+# [중요] retrieval 설정이 없으면 Neo4j 데이터를 검색하지 못합니다!
+# 모든 question_type에 대해 retrievers를 설정하세요.
 
 brand:
   id: "template"
@@ -13,8 +16,10 @@ brand:
 # Features (활성화할 기능 목록)
 # ============================================
 features:
+  - chat
   - conversational
   - factual
+  - validation
 
 # ============================================
 # Neo4j Configuration
@@ -26,19 +31,49 @@ neo4j:
   vector_index: "ontix_global_concept_index"
 
 # ============================================
-# Retrieval Configuration
+# Retrieval Configuration (필수!)
 # ============================================
+# [중요] 이 설정이 없으면 AI가 Neo4j 데이터를 사용하지 못합니다.
+#
+# 사용 가능한 retrievers:
+# - graph: Neo4j 그래프 검색 (Content, Concept 노드) - 필수 권장
+# - vector: 벡터 유사도 검색
+# - product: 제품 전용 검색
+# - stats: 통계/분석 데이터 검색
 retrieval:
+  default_top_k: 10
+  sources:
+    - graph
+    - vector
+
+  # 대화형 질문 - graph 필수!
+  conversational:
+    retrievers:
+      - graph
+    max_results: 10
+
+  # 사실 확인 질문
   factual:
     retrievers:
       - graph
       - vector
     max_results: 10
 
-  conversational:
+  # 인사말 - retrieval 불필요
+  greeting:
+    retrievers: []
+
+  # 제품 추천
+  product_recommendation:
     retrievers:
       - graph
-    max_results: 5
+      - product
+
+  # 분석 질문
+  analytics:
+    retrievers:
+      - graph
+      - stats
 
 # ============================================
 # Generation Configuration
