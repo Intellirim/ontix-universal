@@ -121,13 +121,10 @@ app = FastAPI(
 # CORS 설정 - 가장 먼저!
 # ============================================
 
-ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://localhost:3001",
-    "http://localhost:3002",
-    "http://localhost:3003",
-    "http://127.0.0.1:3000",
-]
+ALLOWED_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
+# 기본값 추가
+if "http://localhost:3000" not in ALLOWED_ORIGINS:
+    ALLOWED_ORIGINS.append("http://localhost:3000")
 logger.info(f"🌐 CORS Origins: {ALLOWED_ORIGINS}")
 
 app.add_middleware(

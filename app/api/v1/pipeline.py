@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 from enum import Enum
+from datetime import datetime, timedelta
 import asyncio
 import logging
 
@@ -17,6 +18,10 @@ router = APIRouter(prefix="/pipeline")
 
 # 파이프라인 실행 상태 저장 (실제 프로덕션에서는 Redis 등 사용)
 pipeline_jobs: Dict[str, Dict[str, Any]] = {}
+
+# 로그 최대 보관 시간 (24시간)
+LOG_RETENTION_HOURS = 24
+MAX_LOGS_PER_JOB = 100
 
 
 class PlatformEnum(str, Enum):
@@ -71,6 +76,47 @@ class PipelineJobListResponse(BaseModel):
 _pipeline_instance: Optional[SNSDataPipeline] = None
 
 
+def add_job_log(job_id: str, message: str, level: str = "info"):
+    """작업에 로그 추가"""
+    if job_id not in pipeline_jobs:
+        return
+    if "logs" not in pipeline_jobs[job_id]:
+        pipeline_jobs[job_id]["logs"] = []
+
+    log_entry = {
+        "timestamp": datetime.now().isoformat(),
+        "level": level,
+        "message": message
+    }
+    pipeline_jobs[job_id]["logs"].append(log_entry)
+
+    # 최대 로그 수 제한
+    if len(pipeline_jobs[job_id]["logs"]) > MAX_LOGS_PER_JOB:
+        pipeline_jobs[job_id]["logs"] = pipeline_jobs[job_id]["logs"][-MAX_LOGS_PER_JOB:]
+
+
+def cleanup_old_jobs():
+    """오래된 작업 삭제 (24시간 이상)"""
+    cutoff = datetime.now() - timedelta(hours=LOG_RETENTION_HOURS)
+    jobs_to_delete = []
+
+    for job_id, job in pipeline_jobs.items():
+        created_at_str = job.get("created_at", "")
+        if created_at_str:
+            try:
+                created_at = datetime.fromisoformat(created_at_str)
+                if created_at < cutoff:
+                    jobs_to_delete.append(job_id)
+            except ValueError:
+                pass
+
+    for job_id in jobs_to_delete:
+        del pipeline_jobs[job_id]
+        logger.info(f"Cleaned up old job: {job_id}")
+
+    return len(jobs_to_delete)
+
+
 def get_pipeline() -> SNSDataPipeline:
     """파이프라인 인스턴스 반환"""
     global _pipeline_instance
@@ -84,19 +130,27 @@ async def run_pipeline_task(job_id: str, request: PipelineRunRequest):
     try:
         pipeline_jobs[job_id]["status"] = "running"
         pipeline_jobs[job_id]["progress"] = "Initializing..."
+        pipeline_jobs[job_id]["logs"] = []
+        add_job_log(job_id, "파이프라인 시작", "info")
 
         # 브랜드 설정 로드
+        add_job_log(job_id, f"브랜드 설정 로드 중: {request.brand_id}", "info")
         try:
             brand_config = ConfigManager.load_brand_config(request.brand_id)
+            add_job_log(job_id, "브랜드 설정 로드 완료", "info")
         except FileNotFoundError:
+            add_job_log(job_id, f"브랜드를 찾을 수 없음: {request.brand_id}", "error")
             raise ValueError(f"Brand not found: {request.brand_id}")
 
         # Website 크롤러 처리 (별도 로직)
         if request.platform.value == "website":
+            add_job_log(job_id, "웹사이트 크롤러 모드 실행", "info")
             await _run_website_crawler(job_id, request)
             return
 
         # 타겟 유형에 따른 크롤링 입력 구성
+        add_job_log(job_id, f"플랫폼: {request.platform.value}, 유형: {request.target_type.value}", "info")
+        add_job_log(job_id, f"대상: {', '.join(request.targets[:5])}" + (f" 외 {len(request.targets)-5}개" if len(request.targets) > 5 else ""), "info")
         crawl_input = _build_crawl_input(
             platform=request.platform.value,
             target_type=request.target_type.value,
@@ -141,14 +195,18 @@ async def run_pipeline_task(job_id: str, request: PipelineRunRequest):
             }
         )
 
+        add_job_log(job_id, f"크롤링 완료: {stats.get('crawled_count', 0)}개 수집", "info")
+        add_job_log(job_id, f"저장 완료: {stats.get('saved_nodes', 0)}개 노드", "info")
         pipeline_jobs[job_id]["status"] = "completed"
         pipeline_jobs[job_id]["progress"] = "Done"
         pipeline_jobs[job_id]["statistics"] = stats
+        add_job_log(job_id, "✅ 파이프라인 작업 완료!", "info")
 
         logger.info(f"Pipeline job {job_id} completed: {stats['saved_nodes']} nodes saved")
 
     except Exception as e:
         logger.error(f"Pipeline job {job_id} failed: {e}")
+        add_job_log(job_id, f"❌ 오류 발생: {str(e)}", "error")
         pipeline_jobs[job_id]["status"] = "failed"
         pipeline_jobs[job_id]["error"] = str(e)
 
@@ -157,8 +215,10 @@ async def _run_website_crawler(job_id: str, request: PipelineRunRequest):
     """웹사이트 크롤러 실행"""
     try:
         pipeline_jobs[job_id]["progress"] = "Starting website crawler..."
+        add_job_log(job_id, "웹 크롤러 초기화 중...", "info")
 
         crawler = get_web_crawler_service()
+        add_job_log(job_id, "웹 크롤러 서비스 준비 완료", "info")
 
         # URL 정리 (줄바꿈, 쉼표 구분 처리)
         urls = []
@@ -170,7 +230,14 @@ async def _run_website_crawler(job_id: str, request: PipelineRunRequest):
                     urls.append(url)
 
         if not urls:
+            add_job_log(job_id, "유효한 URL이 없습니다", "error")
             raise ValueError("No valid URLs provided")
+
+        add_job_log(job_id, f"크롤링 대상 URL: {len(urls)}개", "info")
+        for i, url in enumerate(urls[:5], 1):
+            add_job_log(job_id, f"  {i}. {url[:80]}{'...' if len(url) > 80 else ''}", "info")
+        if len(urls) > 5:
+            add_job_log(job_id, f"  ... 외 {len(urls) - 5}개 URL", "info")
 
         crawl_request = WebCrawlRequest(
             urls=urls,
@@ -180,6 +247,7 @@ async def _run_website_crawler(job_id: str, request: PipelineRunRequest):
         )
 
         pipeline_jobs[job_id]["progress"] = f"Crawling {len(urls)} URL(s)..."
+        add_job_log(job_id, "웹 크롤링 시작...", "info")
 
         # 크롤링 실행 (완료까지 대기)
         job = await crawler.start_crawl(
@@ -189,9 +257,11 @@ async def _run_website_crawler(job_id: str, request: PipelineRunRequest):
         )
 
         if job.status == "completed" and job.result:
+            add_job_log(job_id, f"크롤링 완료: {job.result.total_pages}개 페이지 수집", "info")
             # Neo4j에 저장
             if not request.dry_run:
                 pipeline_jobs[job_id]["progress"] = "Saving to Neo4j..."
+                add_job_log(job_id, "Neo4j 데이터베이스에 저장 중...", "info")
 
                 from app.services.shared.neo4j import get_neo4j_client
                 neo4j = get_neo4j_client()
@@ -221,6 +291,7 @@ async def _run_website_crawler(job_id: str, request: PipelineRunRequest):
                     })
                     saved_count += 1
 
+            add_job_log(job_id, f"저장 완료: {saved_count}개 노드", "info")
             pipeline_jobs[job_id]["status"] = "completed"
             pipeline_jobs[job_id]["progress"] = "Done"
             pipeline_jobs[job_id]["statistics"] = {
@@ -231,6 +302,7 @@ async def _run_website_crawler(job_id: str, request: PipelineRunRequest):
                 "duration_seconds": (job.completed_at - job.started_at).total_seconds() if job.completed_at and job.started_at else 0,
                 "success": True,
             }
+            add_job_log(job_id, "✅ 웹 크롤링 작업 완료!", "info")
 
             logger.info(f"Website crawler job {job_id} completed: {job.result.total_pages} pages crawled")
         else:
@@ -330,6 +402,21 @@ async def run_pipeline(request: PipelineRunRequest, background_tasks: Background
     )
 
 
+class PipelineLogEntry(BaseModel):
+    """로그 항목"""
+    timestamp: str
+    level: str
+    message: str
+
+
+class PipelineLogsResponse(BaseModel):
+    """로그 응답"""
+    job_id: str
+    status: str
+    progress: Optional[str] = None
+    logs: List[PipelineLogEntry] = []
+
+
 @router.get("/status/{job_id}", response_model=PipelineStatusResponse)
 async def get_pipeline_status(job_id: str):
     """파이프라인 작업 상태 조회"""
@@ -346,9 +433,29 @@ async def get_pipeline_status(job_id: str):
     )
 
 
+@router.get("/status/{job_id}/logs", response_model=PipelineLogsResponse)
+async def get_pipeline_logs(job_id: str, offset: int = 0):
+    """파이프라인 작업 로그 조회 (실시간)"""
+    if job_id not in pipeline_jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    job = pipeline_jobs[job_id]
+    logs = job.get("logs", [])[offset:]  # offset 이후 로그만 반환
+
+    return PipelineLogsResponse(
+        job_id=job_id,
+        status=job.get("status", "unknown"),
+        progress=job.get("progress"),
+        logs=[PipelineLogEntry(**log) for log in logs]
+    )
+
+
 @router.get("/jobs", response_model=PipelineJobListResponse)
 async def list_pipeline_jobs(brand_id: Optional[str] = None, limit: int = 20):
     """파이프라인 작업 목록 조회"""
+    # 자동 정리: 24시간 이상 된 작업 삭제
+    cleanup_old_jobs()
+
     jobs = list(pipeline_jobs.values())
 
     if brand_id:
@@ -381,4 +488,15 @@ async def get_supported_platforms():
             {"id": "twitter", "name": "Twitter/X", "icon": "twitter"},
             {"id": "website", "name": "Website", "icon": "globe"},
         ]
+    }
+
+
+@router.post("/cleanup")
+async def cleanup_pipeline_jobs():
+    """오래된 작업 수동 정리 (24시간 이상)"""
+    deleted_count = cleanup_old_jobs()
+    return {
+        "message": f"Cleaned up {deleted_count} old jobs",
+        "deleted_count": deleted_count,
+        "remaining_jobs": len(pipeline_jobs)
     }
