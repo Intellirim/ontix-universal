@@ -92,9 +92,10 @@ async def get_social_monitoring(
             p.platform as platform,
             coalesce(p.content, p.text) as content,
             coalesce(p.sentiment, 'neutral') as sentiment,
-            coalesce(p.likes, 0) as likes,
-            coalesce(p.comments, 0) as comments,
-            coalesce(p.shares, 0) as shares,
+            coalesce(p.like_count, p.likes, 0) as likes,
+            coalesce(p.comment_count, p.comments, 0) as comments,
+            coalesce(p.share_count, p.shares, 0) as shares,
+            coalesce(p.view_count, 0) as views,
             p.author as author,
             p.created_at as created_at,
             p.metrics as metrics
@@ -106,6 +107,17 @@ async def get_social_monitoring(
             'brand_id': brand_id,
             'days': days
         }) or []
+
+        # Interaction 노드에서 감성 데이터 조회 (댓글 반응)
+        interactions_query = """
+        MATCH (i:Interaction)
+        WHERE i.brand_id = $brand_id
+        RETURN
+            coalesce(i.sentiment, 'neutral') as sentiment,
+            count(*) as count
+        """
+        interactions = neo4j.query(interactions_query, {'brand_id': brand_id}) or []
+        interaction_sentiments = {row['sentiment']: row['count'] for row in interactions}
 
         # 데이터가 없으면 기본값 반환
         if not posts:
@@ -133,25 +145,35 @@ async def get_social_monitoring(
             for k, v in platform_counts.items()
         }
 
-        # 감정 분석 집계
+        # 감정 분석 집계 (Content + Interaction 모두 포함)
         sentiment_counts = {'positive': 0, 'neutral': 0, 'negative': 0}
+
+        # Content 감성 집계
         for post in posts:
             sentiment = post.get('sentiment', 'neutral')
             if sentiment in sentiment_counts:
                 sentiment_counts[sentiment] += 1
 
+        # Interaction(댓글) 감성 추가
+        for sentiment_type in ['positive', 'neutral', 'negative']:
+            sentiment_counts[sentiment_type] += interaction_sentiments.get(sentiment_type, 0)
+
+        # 총 분석 대상 (Content + Interaction)
+        total_analyzed = sum(sentiment_counts.values())
+
         # 비율로 변환
         sentiment_distribution = SentimentDistribution(
-            positive=round(sentiment_counts['positive'] / total_posts * 100) if total_posts > 0 else 0,
-            neutral=round(sentiment_counts['neutral'] / total_posts * 100) if total_posts > 0 else 100,
-            negative=round(sentiment_counts['negative'] / total_posts * 100) if total_posts > 0 else 0
+            positive=round(sentiment_counts['positive'] / total_analyzed * 100) if total_analyzed > 0 else 0,
+            neutral=round(sentiment_counts['neutral'] / total_analyzed * 100) if total_analyzed > 0 else 100,
+            negative=round(sentiment_counts['negative'] / total_analyzed * 100) if total_analyzed > 0 else 0
         )
 
-        # 총 인게이지먼트
+        # 총 인게이지먼트 (좋아요 + 댓글 + 공유 + 조회수)
         total_engagement = sum(
             (post.get('likes', 0) or 0) +
             (post.get('comments', 0) or 0) +
-            (post.get('shares', 0) or 0)
+            (post.get('shares', 0) or 0) +
+            (post.get('views', 0) or 0)
             for post in posts
         )
 
@@ -235,8 +257,8 @@ async def get_social_mentions(
             p.platform as platform,
             coalesce(p.content, p.text) as content,
             coalesce(p.sentiment, 'neutral') as sentiment,
-            coalesce(p.likes, 0) as likes,
-            coalesce(p.comments, 0) as comments,
+            coalesce(p.like_count, p.likes, 0) as likes,
+            coalesce(p.comment_count, p.comments, 0) as comments,
             p.author as author,
             p.created_at as created_at
         ORDER BY p.created_at DESC
@@ -285,12 +307,12 @@ async def get_sentiment_analysis(
 
         neo4j = get_neo4j_client()
 
-        # 일별 감정 분석
+        # 일별 감정 분석 (Content + Interaction 포함)
         query = """
-        MATCH (p)
-        WHERE (p:Post OR p:Content)
-          AND p.brand_id = $brand_id
-        WITH date(p.created_at) as day, coalesce(p.sentiment, 'neutral') as sentiment, count(*) as count
+        MATCH (n)
+        WHERE (n:Post OR n:Content OR n:Interaction)
+          AND n.brand_id = $brand_id
+        WITH date(n.created_at) as day, coalesce(n.sentiment, 'neutral') as sentiment, count(*) as count
         RETURN day, sentiment, count
         ORDER BY day ASC
         """
@@ -373,10 +395,11 @@ async def get_platform_breakdown(
           AND p.brand_id = $brand_id
         WITH p.platform as platform,
              count(*) as post_count,
-             sum(coalesce(p.likes, 0)) as total_likes,
-             sum(coalesce(p.comments, 0)) as total_comments,
-             sum(coalesce(p.shares, 0)) as total_shares
-        RETURN platform, post_count, total_likes, total_comments, total_shares
+             sum(coalesce(p.like_count, p.likes, 0)) as total_likes,
+             sum(coalesce(p.comment_count, p.comments, 0)) as total_comments,
+             sum(coalesce(p.share_count, p.shares, 0)) as total_shares,
+             sum(coalesce(p.view_count, 0)) as total_views
+        RETURN platform, post_count, total_likes, total_comments, total_shares, total_views
         ORDER BY post_count DESC
         """
 
@@ -386,13 +409,15 @@ async def get_platform_breakdown(
             {
                 'platform': row.get('platform', 'unknown'),
                 'post_count': row.get('post_count', 0),
-                'total_likes': row.get('total_likes', 0),
-                'total_comments': row.get('total_comments', 0),
-                'total_shares': row.get('total_shares', 0),
+                'total_likes': row.get('total_likes', 0) or 0,
+                'total_comments': row.get('total_comments', 0) or 0,
+                'total_shares': row.get('total_shares', 0) or 0,
+                'total_views': row.get('total_views', 0) or 0,
                 'engagement': (
                     (row.get('total_likes', 0) or 0) +
                     (row.get('total_comments', 0) or 0) +
-                    (row.get('total_shares', 0) or 0)
+                    (row.get('total_shares', 0) or 0) +
+                    (row.get('total_views', 0) or 0)
                 )
             }
             for row in results
