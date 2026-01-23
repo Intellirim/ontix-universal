@@ -594,7 +594,18 @@ class Pipeline:
             logger.warning(f"Unknown generator: {generator_type}, using conversational")
             generator = self.generators['conversational']
 
-        logger.info(f"Generating with: {generator_type}")
+        # AI Advisor와 Content Generation은 gpt-5-mini (feature variant) 사용
+        feature_question_types = ['advisor', 'content_generation']
+        if question_type_str in feature_question_types:
+            model_variant = 'feature'  # gpt-5-mini
+            logger.info(f"Using feature model (gpt-5-mini) for {question_type_str}")
+        else:
+            model_variant = qtype_config.get('model_variant', 'mini')  # 기본값 gpt-4o-mini
+
+        # Generator에 model_variant 설정
+        generator.configure(model_variant=model_variant)
+
+        logger.info(f"Generating with: {generator_type} (model_variant: {model_variant})")
 
         try:
             response = generator.generate(context)
