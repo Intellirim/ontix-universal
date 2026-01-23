@@ -115,12 +115,12 @@ async def generate_content(request: ContentGenerationRequest):
 주어진 참고 콘텐츠의 스타일(이모지 사용, 줄바꿈, 해시태그 배치, 문장 구조)을 최대한 유사하게 따라주세요.
 콘텐츠만 출력하세요. 추가 설명이나 주석 없이 바로 사용할 수 있는 완성된 콘텐츠를 작성하세요."""
 
-        # GPT-5-mini는 reasoning tokens + output tokens를 max_tokens에서 사용
-        # reasoning이 길어지면 실제 output이 비어질 수 있으므로 충분히 크게 설정
+        # GPT-5-mini (feature variant) 사용 - 콘텐츠 생성에 최적화
+        # reasoning tokens + output tokens를 max_tokens에서 사용
         content_text = llm.invoke(
             prompt=prompt,
             system_prompt=system_prompt,
-            model_variant="full",
+            model_variant="feature",  # gpt-5-mini
             max_tokens=8000  # reasoning + output 포함
         )
 
