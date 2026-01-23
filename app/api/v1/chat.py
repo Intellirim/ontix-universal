@@ -78,6 +78,10 @@ async def chat(
     include_validation: bool = Query(
         default=False,
         description="응답에 검증 정보 포함 여부"
+    ),
+    session_id: Optional[str] = Query(
+        default=None,
+        description="세션 ID (없으면 자동 생성)"
     )
 ):
     """
@@ -86,6 +90,7 @@ async def chat(
     Args:
         request: 채팅 요청
         include_validation: 검증 정보 포함 여부
+        session_id: 세션 ID (선택, 채팅 저장에 사용)
 
     Returns:
         ChatResponse (또는 검증 정보 포함 시 EnhancedChatResponse)
@@ -99,6 +104,28 @@ async def chat(
             question=request.message,
             conversation_history=[msg.dict() for msg in request.conversation_history],
             use_cache=True
+        )
+
+        # 검증 정보 추출
+        validation_info = response.metadata.get('validation', {}) if response.metadata else {}
+
+        # 메타데이터 구성
+        message_metadata = {
+            'response_time_ms': response.metadata.get('response_time_ms') if response.metadata else None,
+            'question_type': response.question_type,
+            'grade': validation_info.get('grade'),
+            'score': validation_info.get('score'),
+            'handled_by': response.metadata.get('handled_by') if response.metadata else None,
+        }
+
+        # 채팅 저장 (백그라운드) - 모든 채팅 데이터 수집
+        background_tasks.add_task(
+            _save_chat_to_storage,
+            session_id,
+            request.brand_id,
+            request.message,
+            response.message,
+            message_metadata
         )
 
         # 분석 추적 (백그라운드)
@@ -353,7 +380,7 @@ def _save_chat_to_storage(
     assistant_message: str,
     metadata: Dict[str, Any]
 ):
-    """채팅을 스토리지에 저장 (백그라운드)"""
+    """채팅을 PostgreSQL에 저장 (백그라운드) - Neo4j 오염 방지"""
     try:
         storage = get_chat_storage()
 
@@ -368,7 +395,7 @@ def _save_chat_to_storage(
             metadata=metadata
         )
 
-        logger.debug(f"Chat saved to session {session.id}")
+        logger.debug(f"Chat saved to PostgreSQL session {session.id}")
     except Exception as e:
         logger.error(f"Chat storage error: {e}")
 

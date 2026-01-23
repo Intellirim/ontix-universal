@@ -366,9 +366,9 @@ class LLMClient:
             output_price=10.00,
             supports_sampling_params=True,  # GPT-4o는 sampling params 지원
         ),
-        # GPT-5: Feature 핸들러용 (AI Advisor, 콘텐츠 생성 등 중요 기능)
+        # GPT-5-mini: Feature 핸들러용 (AI Advisor, 콘텐츠 생성 등) - 속도 최적화
         ModelVariant.FEATURE: ModelConfig(
-            model_name="gpt-5",
+            model_name="gpt-5-mini",
             temperature=0.7,
             max_tokens=3000,
             input_price=1.00,

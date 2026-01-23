@@ -880,12 +880,12 @@ class CostEstimator:
         model: str = None,
     ) -> float:
         """
-        API 호출 비용 추정 (gpt-4o-mini 기준).
+        API 호출 비용 추정 (gpt-5-mini 기준).
 
         Args:
             input_text: 입력 텍스트
             output_tokens_estimate: 예상 출력 토큰 수
-            model: 모델명 (무시됨, gpt-4o-mini 고정)
+            model: 모델명 (무시됨, gpt-5-mini 고정)
 
         Returns:
             예상 비용 (USD)
@@ -917,7 +917,7 @@ class LLMProcessor:
         statistics: 누적 처리 통계
 
     Example:
-        >>> processor = LLMProcessor(model="gpt-4o-mini")
+        >>> processor = LLMProcessor(model="gpt-5-mini")
         >>> result = processor.process_contents(
         ...     actors=actors,
         ...     contents=contents,
@@ -930,7 +930,7 @@ class LLMProcessor:
 
     def __init__(
         self,
-        model: str = None,  # 무시됨, gpt-4o-mini 고정
+        model: str = None,  # 무시됨, gpt-5-mini 고정
         temperature: float = ModelConfig.DEFAULT_TEMPERATURE,
         api_key: Optional[str] = None,
         max_retries: int = ModelConfig.MAX_RETRIES,
@@ -940,7 +940,7 @@ class LLMProcessor:
         LLM 프로세서 초기화.
 
         Args:
-            model: 무시됨 (gpt-4o-mini 고정 사용)
+            model: 무시됨 (gpt-5-mini 고정 사용)
             temperature: 생성 온도 (0.0 ~ 1.0). 낮을수록 결정적.
             api_key: OpenAI API 키. None이면 환경변수에서 로드.
             max_retries: 최대 재시도 횟수.
@@ -950,7 +950,7 @@ class LLMProcessor:
             ValueError: API 키가 없거나 유효하지 않은 경우.
             RuntimeError: LLM 초기화 실패 시.
         """
-        # gpt-4o-mini 고정 사용
+        # gpt-5-mini 고정 사용
         self.model = ModelConfig.DEFAULT_MODEL
         self.temperature = temperature
         self.max_retries = max_retries
@@ -1646,13 +1646,13 @@ def create_llm_processor(
     """
     LLMProcessor 팩토리 함수.
 
-    gpt-4o-mini 모델로 프로세서를 생성합니다.
+    gpt-5-mini 모델로 프로세서를 생성합니다.
 
     Args:
         **kwargs: LLMProcessor 추가 인자
 
     Returns:
-        설정된 LLMProcessor 인스턴스 (gpt-4o-mini 고정)
+        설정된 LLMProcessor 인스턴스 (gpt-5-mini 고정)
 
     Example:
         >>> processor = create_llm_processor()

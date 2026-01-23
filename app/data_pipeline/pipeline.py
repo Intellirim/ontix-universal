@@ -925,7 +925,7 @@ class SNSDataPipeline:
         neo4j_username: Optional[str] = None,
         neo4j_password: Optional[str] = None,
         openai_api_key: Optional[str] = None,
-        llm_model: str = None,  # 무시됨, gpt-4o-mini 고정
+        llm_model: str = None,  # 무시됨, gpt-5-mini 고정
     ) -> None:
         """
         파이프라인 초기화.
@@ -936,7 +936,7 @@ class SNSDataPipeline:
             neo4j_username: Neo4j 사용자명. None이면 환경변수에서 로드.
             neo4j_password: Neo4j 비밀번호. None이면 환경변수에서 로드.
             openai_api_key: OpenAI API 키. None이면 환경변수에서 로드.
-            llm_model: 무시됨 (gpt-4o-mini 고정 사용).
+            llm_model: 무시됨 (gpt-5-mini 고정 사용).
         """
         logger.info("Initializing SNS Data Pipeline...")
 
@@ -950,7 +950,7 @@ class SNSDataPipeline:
             password=neo4j_password,
         )
 
-        # LLM 프로세서 (gpt-4o-mini 고정)
+        # LLM 프로세서 (gpt-5-mini 고정)
         self.llm_processor = LLMProcessor(
             api_key=openai_api_key,
         )

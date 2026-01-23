@@ -231,9 +231,9 @@ class ConversationalGenerator(BaseGenerator):
     """
 
     # 기본 설정
-    DEFAULT_TEMPERATURE = 0.8
-    DEFAULT_MODEL = "full"
-    DEFAULT_MAX_TOKENS = 1500
+    DEFAULT_TEMPERATURE = 0.7
+    DEFAULT_MODEL = "mini"  # 더 빠른 응답
+    DEFAULT_MAX_TOKENS = 500  # 간결한 응답
 
     def __init__(self, brand_config: Dict):
         super().__init__(brand_config, GeneratorType.CONVERSATIONAL)
@@ -509,10 +509,10 @@ Response:"""
         # 포맷팅 시작
         context_parts = [f"\n=== Retrieved Data ({total} items) ==="]
 
-        # Content 노드 (실제 SNS 콘텐츠) 먼저 - 더 많은 내용 포함
+        # Content 노드 (실제 SNS 콘텐츠) 먼저 - 컨텍스트 크기 제한
         if content_items:
             context_parts.append("\n## ACTUAL CONTENT (These are REAL posts - use them in your answer!):")
-            for i, item in enumerate(content_items[:6], 1):  # 최대 6개
+            for i, item in enumerate(content_items[:3], 1):  # 최대 3개로 축소
                 if isinstance(item, dict):
                     platform = item.get('metadata', {}).get('platform', '') or item.get('platform', '')
                     url = item.get('metadata', {}).get('url', '') or item.get('url', '')
@@ -523,8 +523,8 @@ Response:"""
                     text = getattr(item, 'content', '') or getattr(item, 'text', '')
 
                 if text:
-                    # Content는 더 많은 내용 포함 (500자)
-                    text = text[:500] if len(text) > 500 else text
+                    # Content는 300자로 제한 (LLM 컨텍스트 크기 최적화)
+                    text = text[:300] if len(text) > 300 else text
                     platform_label = f"[{platform.upper()}]" if platform else "[POST]"
                     context_parts.append(f"\n{i}. {platform_label}")
                     if url:
@@ -534,7 +534,7 @@ Response:"""
         # Concept 노드 (설명/개념)
         if concept_items:
             context_parts.append("\n## RELATED CONCEPTS:")
-            for item in concept_items[:4]:  # 최대 4개
+            for item in concept_items[:2]:  # 최대 2개로 축소
                 if isinstance(item, dict):
                     node_id = item.get('id', '')
                     content = item.get('content', '') or item.get('description', '')
