@@ -448,10 +448,10 @@ class ResponseFormatter:
 class OutputValidator:
     """출력 검증기"""
 
-    # 필터링할 패턴
+    # 필터링할 패턴 (보안 관련만 - "내부"는 일반적인 비즈니스 용어이므로 제외)
     FORBIDDEN_PATTERNS = [
         r'(?i)(api.?key|password|secret|token)',
-        r'(?i)(내부|confidential|private)',
+        r'(?i)(confidential|private)',
     ]
 
     @classmethod
