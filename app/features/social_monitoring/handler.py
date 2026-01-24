@@ -47,6 +47,29 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def _parse_metrics(metrics_str: Optional[str]) -> Dict[str, int]:
+    """
+    Parse metrics string like "likes:188,comments:0,shares:0,views:3696"
+    Returns dict with parsed values
+    """
+    result = {'likes': 0, 'comments': 0, 'shares': 0, 'views': 0}
+
+    if not metrics_str or not isinstance(metrics_str, str):
+        return result
+
+    try:
+        for part in metrics_str.split(','):
+            if ':' in part:
+                key, value = part.split(':', 1)
+                key = key.strip().lower()
+                if key in result:
+                    result[key] = int(value.strip())
+    except Exception:
+        pass
+
+    return result
+
+
 # ============================================================
 # Configuration
 # ============================================================
@@ -398,7 +421,7 @@ class SocialMonitoringHandler(FeatureHandler):
 
             neo4j = get_neo4j_client()
 
-            # Content와 Interaction 데이터 조회
+            # Content와 Interaction 데이터 조회 (metrics 필드 포함)
             query = """
             MATCH (c:Content)
             WHERE c.brand_id = $brand_id
@@ -412,6 +435,7 @@ class SocialMonitoringHandler(FeatureHandler):
                    c.content_type as content_type,
                    interaction_count as comments,
                    c.hashtags as hashtags,
+                   c.metrics as metrics,
                    recent_interactions,
                    c.created_at as posted_at
             ORDER BY c.created_at DESC
@@ -432,10 +456,15 @@ class SocialMonitoringHandler(FeatureHandler):
             sentiment_data = neo4j.query(sentiment_query, {'brand_id': self.brand_id}) or []
             sentiment_summary = {row['sentiment']: row['count'] for row in sentiment_data}
 
-            total_engagement = sum(
-                (item.get('likes', 0) or 0) + (item.get('comments', 0) or 0)
-                for item in items
-            )
+            # metrics 문자열 파싱해서 engagement 계산
+            total_engagement = 0
+            for item in items:
+                parsed = _parse_metrics(item.get('metrics'))
+                likes = item.get('likes', 0) or parsed['likes']
+                comments = item.get('comments', 0) or parsed['comments']
+                shares = parsed['shares']
+                views = parsed['views']
+                total_engagement += likes + comments + shares + views
             platforms_covered = list(set(
                 item.get('platform', 'unknown') for item in items if item.get('platform')
             ))
@@ -479,8 +508,11 @@ class SocialMonitoringHandler(FeatureHandler):
         for i, item in enumerate(items[:5], 1):
             platform = item.get('platform', 'unknown')
             content = (item.get('content', '') or '')[:50]
-            likes = item.get('likes', 0) or 0
-            comments = item.get('comments', 0) or 0
+            # metrics 문자열 파싱
+            parsed = _parse_metrics(item.get('metrics'))
+            likes = item.get('likes', 0) or parsed['likes']
+            comments = item.get('comments', 0) or parsed['comments']
+            views = parsed['views']
             content_type = item.get('content_type', '')
 
             platform_emoji = {
@@ -492,7 +524,7 @@ class SocialMonitoringHandler(FeatureHandler):
 
             type_tag = f"[{content_type}] " if content_type else ""
             lines.append(f"{i}. {platform_emoji} {type_tag}{content}...")
-            lines.append(f"   ❤️ {likes:,} | 💬 {comments:,}")
+            lines.append(f"   ❤️ {likes:,} | 💬 {comments:,} | 👁️ {views:,}")
 
             # 최근 댓글 표시
             recent_interactions = item.get('recent_interactions', [])

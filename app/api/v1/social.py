@@ -167,28 +167,31 @@ async def get_social_monitoring(
         )
 
         # 총 인게이지먼트 (좋아요 + 댓글 + 공유 + 조회수)
-        total_engagement = sum(
-            (post.get('likes', 0) or 0) +
-            (post.get('comments', 0) or 0) +
-            (post.get('shares', 0) or 0) +
-            (post.get('views', 0) or 0)
-            for post in posts
-        )
+        # metrics 필드 문자열 파싱 지원 ("likes:188,comments:0,shares:0,views:3696")
+        total_engagement = 0
+        for post in posts:
+            # 우선 개별 필드에서 가져오고, 없으면 metrics 문자열 파싱
+            parsed_metrics = _parse_metrics(post.get('metrics'))
+            likes = post.get('likes', 0) or parsed_metrics['likes']
+            comments = post.get('comments', 0) or parsed_metrics['comments']
+            shares = post.get('shares', 0) or parsed_metrics['shares']
+            views = post.get('views', 0) or parsed_metrics['views']
+            total_engagement += likes + comments + shares + views
 
         # 최근 멘션 (상위 20개)
-        recent_mentions = [
-            SocialMention(
+        recent_mentions = []
+        for post in posts[:20]:
+            parsed_metrics = _parse_metrics(post.get('metrics'))
+            recent_mentions.append(SocialMention(
                 id=str(post.get('id', '')),
                 platform=post.get('platform', 'unknown'),
                 content=(post.get('content', '') or '')[:200],
                 sentiment=post.get('sentiment', 'neutral'),
                 timestamp=_format_timestamp(post.get('created_at')),
-                likes=post.get('likes', 0) or 0,
-                comments=post.get('comments', 0) or 0,
+                likes=post.get('likes', 0) or parsed_metrics['likes'],
+                comments=post.get('comments', 0) or parsed_metrics['comments'],
                 author=post.get('author')
-            )
-            for post in posts[:20]
-        ]
+            ))
 
         # 트렌딩 토픽 (해시태그 집계)
         trending_topics = _extract_trending_topics(posts)
@@ -454,6 +457,29 @@ def _format_timestamp(ts) -> str:
         return ts.isoformat()
     except:
         return str(ts)
+
+
+def _parse_metrics(metrics_str: Optional[str]) -> Dict[str, int]:
+    """
+    Parse metrics string like "likes:188,comments:0,shares:0,views:3696"
+    Returns dict with parsed values
+    """
+    result = {'likes': 0, 'comments': 0, 'shares': 0, 'views': 0}
+
+    if not metrics_str or not isinstance(metrics_str, str):
+        return result
+
+    try:
+        for part in metrics_str.split(','):
+            if ':' in part:
+                key, value = part.split(':', 1)
+                key = key.strip().lower()
+                if key in result:
+                    result[key] = int(value.strip())
+    except Exception:
+        pass
+
+    return result
 
 
 def _extract_trending_topics(posts: List[Dict[str, Any]]) -> List[TrendingTopic]:
