@@ -45,8 +45,13 @@ from typing import (
 
 from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_experimental.graph_transformers import LLMGraphTransformer
 from langchain_openai import ChatOpenAI
+
+# Optional: LLMGraphTransformer (may not be available in all langchain-experimental versions)
+try:
+    from langchain_experimental.graph_transformers import LLMGraphTransformer
+except ImportError:
+    LLMGraphTransformer = None  # type: ignore
 
 from ..domain.models import (
     ActorDTO,
@@ -993,21 +998,25 @@ class LLMProcessor:
             ])
 
             # Transformer 초기화
-            self.transformer = LLMGraphTransformer(
-                llm=self.llm,
-                prompt=custom_prompt,
-                allowed_nodes=GraphNodeTypes.all_types(),
-                allowed_relationships=GraphRelationshipTypes.all_types(),
-                node_properties=[
-                    "name", "brand_id", "platform", "content_type",
-                    "description", "type", "canonical_name", "synonyms",
-                    "url", "text", "created_at", "metrics",
-                    "author", "philosophy", "category", "sentiment",
-                    "confidence", "hashtags", "mentions",
-                ],
-                relationship_properties=["confidence", "polarity", "score", "timestamp"],
-                strict_mode=False,
-            )
+            if LLMGraphTransformer is None:
+                logger.warning("LLMGraphTransformer not available, graph transformation disabled")
+                self.transformer = None
+            else:
+                self.transformer = LLMGraphTransformer(
+                    llm=self.llm,
+                    prompt=custom_prompt,
+                    allowed_nodes=GraphNodeTypes.all_types(),
+                    allowed_relationships=GraphRelationshipTypes.all_types(),
+                    node_properties=[
+                        "name", "brand_id", "platform", "content_type",
+                        "description", "type", "canonical_name", "synonyms",
+                        "url", "text", "created_at", "metrics",
+                        "author", "philosophy", "category", "sentiment",
+                        "confidence", "hashtags", "mentions",
+                    ],
+                    relationship_properties=["confidence", "polarity", "score", "timestamp"],
+                    strict_mode=False,
+                )
 
             # 통계 초기화
             self._statistics: ProcessingStatistics = {
@@ -1191,6 +1200,11 @@ class LLMProcessor:
     ) -> GraphProcessingResult:
         """재시도 로직이 포함된 그래프 처리"""
         result = GraphProcessingResult(graph_documents=[])
+
+        if self.transformer is None:
+            logger.warning("LLMGraphTransformer not available, skipping graph processing")
+            result.processing_time_seconds = 0.0
+            return result
 
         for attempt in range(1, self.max_retries + 1):
             try:

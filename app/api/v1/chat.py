@@ -103,7 +103,8 @@ async def chat(
         response = engine.ask(
             question=request.message,
             conversation_history=[msg.dict() for msg in request.conversation_history],
-            use_cache=True
+            use_cache=True,
+            question_type=request.question_type
         )
 
         # 검증 정보 추출
@@ -439,6 +440,7 @@ class ChatWithSessionRequest(BaseModel):
     session_id: Optional[str] = Field(None, description="세션 ID (없으면 자동 생성)")
     user_id: Optional[str] = Field(None, description="사용자 ID")
     use_history: bool = Field(True, description="이전 대화 컨텍스트 사용 여부")
+    question_type: Optional[str] = Field(None, description="질문 타입 (advisor, analytics 등)")
 
 
 class ChatWithSessionResponse(BaseModel):
@@ -642,7 +644,8 @@ async def chat_with_session(
         response = engine.ask(
             question=request.message,
             conversation_history=conversation_history,
-            use_cache=True
+            use_cache=True,
+            question_type=request.question_type
         )
 
         # 검증 정보 추출

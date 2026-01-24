@@ -352,7 +352,7 @@ class LLMClient:
         ),
         ModelVariant.CREATIVE: ModelConfig(
             model_name="gpt-5-mini",
-            temperature=0.9,  # GPT-5에서는 무시됨
+            temperature=1.0,  # GPT-5-mini는 temperature=1 만 지원
             max_tokens=3000,
             input_price=0.150,
             output_price=0.600,
@@ -369,7 +369,7 @@ class LLMClient:
         # GPT-5-mini: Feature 핸들러용 (AI Advisor, 콘텐츠 생성 등) - 속도 최적화
         ModelVariant.FEATURE: ModelConfig(
             model_name="gpt-5-mini",
-            temperature=0.7,
+            temperature=1.0,  # GPT-5-mini는 temperature=1 만 지원
             max_tokens=3000,
             input_price=1.00,
             output_price=3.00,
@@ -414,14 +414,13 @@ class LLMClient:
                     max_retries=config.max_retries,
                 )
             else:
-                # GPT-5-mini: sampling parameters 제거
+                # GPT-5-mini: temperature=1 만 지원 (명시적 설정)
                 self.models[variant] = ChatOpenAI(
                     api_key=self.config.api_key,
                     model=config.model_name,
-                    max_tokens=config.max_tokens,
+                    temperature=1,  # GPT-5는 temperature=1 만 지원
                     request_timeout=config.request_timeout,
                     max_retries=config.max_retries,
-                    # temperature, top_p 제거됨
                 )
 
     def count_tokens(self, text: str) -> int:
@@ -468,10 +467,10 @@ class LLMClient:
             llm = self.models.get(model_variant, self.models[ModelVariant.MINI])
             model_config = self.MODEL_CONFIGS.get(model_variant, self.MODEL_CONFIGS[ModelVariant.MINI])
 
-            # 온도/토큰 오버라이드 (GPT-5 계열은 temperature 지원 안함)
+            # 온도/토큰 오버라이드 (GPT-5 계열은 temperature/max_tokens 지원 안함)
             if temperature is not None and model_config.supports_sampling_params:
                 llm = llm.bind(temperature=temperature)
-            if max_tokens is not None:
+            if max_tokens is not None and model_config.supports_sampling_params:
                 llm = llm.bind(max_tokens=max_tokens)
 
             # 메시지 구성

@@ -1477,17 +1477,16 @@ class Neo4jRepository:
         brand_id: str,
         limit: int = 100,
         node_types: Optional[List[str]] = None,
+        balanced: bool = False,
     ) -> Dict[str, Any]:
         """
         그래프 시각화를 위한 노드와 관계 데이터 조회.
-
-        Neo4j에서 실제 노드와 관계를 가져와 프론트엔드 시각화에 사용할 수 있는
-        형태로 반환합니다.
 
         Args:
             brand_id: 브랜드 ID
             limit: 최대 노드 수 (기본값 100)
             node_types: 필터링할 노드 타입 리스트 (선택)
+            balanced: True면 타입별로 균형있게 노드를 가져옴 (카드용)
 
         Returns:
             Dict containing:
@@ -1495,74 +1494,279 @@ class Neo4jRepository:
                 - relationships: 관계 리스트 (source, target, type, properties)
                 - stats: 통계 정보
         """
-        # 노드 타입 필터
-        type_filter = ""
-        if node_types:
-            labels = " OR ".join([f"n:{t}" for t in node_types])
-            type_filter = f"AND ({labels})"
+        # Debug logging
+        logger.info(f"get_graph_visualization_data: brand_id={brand_id}, limit={limit}, balanced={balanced}")
 
-        # 노드 조회 쿼리 - brand_id로 필터링하거나 Brand 노드 자체인 경우
-        # Brand 노드는 id가 brand_id와 같고 brand_id 속성이 없을 수 있음
-        nodes_query = f"""
-        MATCH (n)
-        WHERE (n.brand_id = $brand_id OR (n:Brand AND n.id = $brand_id)) {type_filter}
-        RETURN
-            elementId(n) as element_id,
-            n.id as id,
-            labels(n)[0] as type,
-            n.name as name,
-            properties(n) as properties
-        ORDER BY n.created_at DESC
-        LIMIT $limit
+        if balanced:
+            # 타입별로 균형있게 가져오기 (카드 미리보기용)
+            logger.info("Using balanced graph data function")
+            return self._get_balanced_graph_data(brand_id, limit)
+
+        # 노드 타입 필터 조건
+        type_conditions = []
+        if node_types:
+            type_conditions = [f"n:{t}" for t in node_types] + [f"m:{t}" for t in node_types]
+
+        type_filter = ""
+        if type_conditions:
+            type_filter = f"AND ({' OR '.join(type_conditions)})"
+
+        # 직접 노드와 관계를 함께 가져오는 쿼리
+        # Brand 노드도 brand_id 속성으로 매칭 (Brand.id와 brand_id가 다를 수 있음)
+        graph_query = f"""
+        MATCH (n)-[r]-(m)
+        WHERE (n.brand_id = $brand_id OR (n:Brand AND n.brand_id = $brand_id))
+          AND (m.brand_id = $brand_id OR (m:Brand AND m.brand_id = $brand_id))
+          {type_filter}
+        RETURN DISTINCT
+            n.id as source_id,
+            labels(n)[0] as source_type,
+            COALESCE(n.name, n.text, n.id) as source_name,
+            properties(n) as source_props,
+            m.id as target_id,
+            labels(m)[0] as target_type,
+            COALESCE(m.name, m.text, m.id) as target_name,
+            properties(m) as target_props,
+            type(r) as rel_type,
+            startNode(r) = n as is_outgoing
+        LIMIT $rel_limit
         """
 
-        nodes_result = self.query(nodes_query, {"brand_id": brand_id, "limit": limit})
+        rel_limit = limit * 3
+        result = self.query(graph_query, {"brand_id": brand_id, "rel_limit": rel_limit})
 
-        # 노드 ID 목록 추출
-        node_ids = [r["id"] for r in nodes_result if r["id"]]
+        # 노드와 관계 추출
+        nodes_map: Dict[str, Dict[str, Any]] = {}
+        relationships: List[Dict[str, Any]] = []
+        seen_rels: Set[str] = set()
 
-        # 노드 데이터 정리
-        nodes = []
-        for r in nodes_result:
-            node_id = r["id"] or r["element_id"]
-            props = r["properties"] or {}
+        for r in result:
+            # Source 노드 추가
+            source_id = r["source_id"]
+            if source_id and source_id not in nodes_map:
+                props = r["source_props"] or {}
+                name = r["source_name"] or props.get("name") or source_id
+                label = str(name)[:35] if name else r["source_type"]
+                if len(str(name)) > 35:
+                    label += "..."
 
-            # label 결정: name > id > type
-            label = r["name"] or props.get("name") or r["id"] or r["type"]
+                nodes_map[source_id] = {
+                    "id": source_id,
+                    "label": label,
+                    "type": r["source_type"],
+                    "properties": props,
+                }
 
-            nodes.append({
-                "id": node_id,
-                "label": str(label)[:50] if label else r["type"],  # 라벨 길이 제한
-                "type": r["type"],
-                "properties": props,
-            })
+            # Target 노드 추가
+            target_id = r["target_id"]
+            if target_id and target_id not in nodes_map:
+                props = r["target_props"] or {}
+                name = r["target_name"] or props.get("name") or target_id
+                label = str(name)[:35] if name else r["target_type"]
+                if len(str(name)) > 35:
+                    label += "..."
 
-        # 관계 조회 쿼리 - 가져온 노드들 사이의 모든 관계
-        # Brand 노드도 포함하여 관계 조회
-        relationships = []
-        if node_ids:
-            rels_query = """
-            MATCH (a)-[r]->(b)
-            WHERE a.id IN $node_ids AND b.id IN $node_ids
-            RETURN DISTINCT
-                a.id as source,
-                b.id as target,
-                type(r) as type,
-                properties(r) as properties
-            """
-            rels_result = self.query(rels_query, {"node_ids": node_ids})
+                nodes_map[target_id] = {
+                    "id": target_id,
+                    "label": label,
+                    "type": r["target_type"],
+                    "properties": props,
+                }
 
-            for r in rels_result:
-                if r["source"] and r["target"]:
+            # 관계 추가 (방향 고려)
+            if source_id and target_id and r["rel_type"]:
+                # 실제 관계 방향 결정
+                if r["is_outgoing"]:
+                    actual_source, actual_target = source_id, target_id
+                else:
+                    actual_source, actual_target = target_id, source_id
+
+                rel_key = f"{actual_source}-{r['rel_type']}-{actual_target}"
+                if rel_key not in seen_rels:
+                    seen_rels.add(rel_key)
                     relationships.append({
-                        "source": r["source"],
-                        "target": r["target"],
-                        "type": r["type"],
-                        "properties": r["properties"] or {},
+                        "source": actual_source,
+                        "target": actual_target,
+                        "type": r["rel_type"],
+                        "properties": {},
                     })
+
+        # limit 적용
+        nodes = list(nodes_map.values())[:limit]
+        node_ids_set = {n["id"] for n in nodes}
+
+        # 양쪽 노드가 모두 있는 관계만 필터링
+        final_relationships = [
+            rel for rel in relationships
+            if rel["source"] in node_ids_set and rel["target"] in node_ids_set
+        ]
 
         # 통계 조회
         stats = self.get_brand_statistics(brand_id)
+
+        return {
+            "nodes": nodes,
+            "relationships": final_relationships,
+            "stats": {
+                "total_nodes": stats["total_nodes"],
+                "total_relationships": stats["total_relationships"],
+                "returned_nodes": len(nodes),
+                "returned_relationships": len(final_relationships),
+                "node_types": stats["node_types"],
+                "relationship_types": stats["relationship_types"],
+            },
+        }
+
+    def _get_balanced_graph_data(
+        self,
+        brand_id: str,
+        limit: int = 50,
+    ) -> Dict[str, Any]:
+        """
+        타입별로 균형있게 노드를 가져옵니다 (카드 미리보기용).
+
+        각 노드 타입에서 골고루 가져와 다양한 색상이 표시되도록 합니다.
+
+        Args:
+            brand_id: 브랜드 ID
+            limit: 총 노드 수
+
+        Returns:
+            균형잡힌 노드와 관계 데이터
+        """
+        # 타입별 할당량 계산 (Brand 1개 + 나머지 균등 분배)
+        type_priority = ["Brand", "Content", "Concept", "Interaction", "Topic", "Actor"]
+        per_type = max(3, (limit - 1) // (len(type_priority) - 1))
+
+        nodes_map: Dict[str, Dict[str, Any]] = {}
+        all_node_ids: Set[str] = set()
+
+        # 1. Brand 노드 (1개) - brand_id 또는 id로 매칭
+        brand_query = """
+        MATCH (b:Brand)
+        WHERE b.brand_id = $brand_id OR toLower(b.id) = toLower($brand_id)
+        RETURN b.id as id, labels(b)[0] as type,
+               COALESCE(b.name, b.id) as name, properties(b) as props
+        LIMIT 1
+        """
+        brand_result = self.query(brand_query, {"brand_id": brand_id})
+        for r in brand_result:
+            node_id = r["id"]
+            if node_id:
+                nodes_map[node_id] = {
+                    "id": node_id,
+                    "label": str(r["name"])[:35] if r["name"] else "Brand",
+                    "type": r["type"],
+                    "properties": r["props"] or {},
+                }
+                all_node_ids.add(node_id)
+
+        # 2. 각 타입별 노드 가져오기 (관계가 있는 노드 우선)
+        for node_type in type_priority[1:]:  # Brand 제외
+            type_query = f"""
+            MATCH (n:{node_type})
+            WHERE n.brand_id = $brand_id
+            OPTIONAL MATCH (n)-[r]-()
+            WITH n, count(r) as rel_count
+            ORDER BY rel_count DESC
+            LIMIT $per_type
+            RETURN n.id as id, labels(n)[0] as type,
+                   COALESCE(n.name, n.text, n.id) as name,
+                   properties(n) as props
+            """
+            type_result = self.query(type_query, {
+                "brand_id": brand_id,
+                "per_type": per_type,
+            })
+
+            for r in type_result:
+                node_id = r["id"]
+                if node_id and node_id not in nodes_map:
+                    name = r["name"] or node_type
+                    label = str(name)[:35]
+                    if len(str(name)) > 35:
+                        label += "..."
+
+                    nodes_map[node_id] = {
+                        "id": node_id,
+                        "label": label,
+                        "type": r["type"],
+                        "properties": r["props"] or {},
+                    }
+                    all_node_ids.add(node_id)
+
+        # 3. 수집된 노드들 사이의 관계 가져오기
+        if len(all_node_ids) > 1:
+            node_ids_list = list(all_node_ids)
+            rel_query = """
+            MATCH (n)-[r]->(m)
+            WHERE n.id IN $node_ids AND m.id IN $node_ids
+            RETURN DISTINCT n.id as source, m.id as target, type(r) as rel_type
+            """
+            rel_result = self.query(rel_query, {"node_ids": node_ids_list})
+
+            relationships = []
+            seen_rels: Set[str] = set()
+
+            for r in rel_result:
+                if r["source"] and r["target"] and r["rel_type"]:
+                    rel_key = f"{r['source']}-{r['rel_type']}-{r['target']}"
+                    if rel_key not in seen_rels:
+                        seen_rels.add(rel_key)
+                        relationships.append({
+                            "source": r["source"],
+                            "target": r["target"],
+                            "type": r["rel_type"],
+                            "properties": {},
+                        })
+        else:
+            relationships = []
+
+        # 4. Brand와 다른 노드들 사이의 관계도 가져오기
+        # Brand 노드의 id가 brand_id와 다를 수 있으므로 brand_id로 매칭
+        brand_node_id = None
+        for r in brand_result:
+            brand_node_id = r["id"]
+            break
+
+        if brand_node_id:
+            brand_rel_query = """
+            MATCH (b:Brand)-[r]-(n)
+            WHERE b.brand_id = $brand_id AND n.id IN $node_ids
+            RETURN b.id as brand_id, n.id as node_id, type(r) as rel_type,
+                   startNode(r) = b as is_outgoing
+            """
+            brand_rel_result = self.query(brand_rel_query, {
+                "brand_id": brand_id,
+                "node_ids": list(all_node_ids - {brand_node_id}),
+            })
+
+            for r in brand_rel_result:
+                if r["brand_id"] and r["node_id"] and r["rel_type"]:
+                    if r["is_outgoing"]:
+                        source, target = r["brand_id"], r["node_id"]
+                    else:
+                        source, target = r["node_id"], r["brand_id"]
+
+                    rel_key = f"{source}-{r['rel_type']}-{target}"
+                    if rel_key not in seen_rels:
+                        seen_rels.add(rel_key)
+                        relationships.append({
+                            "source": source,
+                            "target": target,
+                            "type": r["rel_type"],
+                            "properties": {},
+                        })
+
+        # 결과
+        nodes = list(nodes_map.values())[:limit]
+        stats = self.get_brand_statistics(brand_id)
+
+        # 반환된 노드 타입 집계
+        returned_types: Dict[str, int] = {}
+        for node in nodes:
+            t = node["type"]
+            returned_types[t] = returned_types.get(t, 0) + 1
 
         return {
             "nodes": nodes,
@@ -1572,8 +1776,9 @@ class Neo4jRepository:
                 "total_relationships": stats["total_relationships"],
                 "returned_nodes": len(nodes),
                 "returned_relationships": len(relationships),
-                "node_types": stats["node_types"],
+                "node_types": returned_types,
                 "relationship_types": stats["relationship_types"],
+                "balanced": True,
             },
         }
 

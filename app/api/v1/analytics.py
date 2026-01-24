@@ -107,15 +107,20 @@ async def get_analytics_summary(
             F=round(grade_counts.get('F', 0) / total_graded * 100) if total_graded > 0 else 0,
         )
 
-        # 일별 통계 변환
-        daily_stats = [
-            DailyStat(
+        # 일별 통계 변환 - sessions 수와 engagement 계산
+        daily_stats = []
+        for row in analytics.daily_message_counts:
+            msg_count = row.get('count', 0)
+            # 대략적인 세션 수 추정 (평균 5개 메시지/세션 가정)
+            session_count = max(1, msg_count // 5) if msg_count > 0 else 0
+            # engagement = sessions * 10 + messages (프론트엔드 공식)
+            engagement = session_count * 10 + msg_count
+            daily_stats.append(DailyStat(
                 date=row.get('date', ''),
-                sessions=0,  # PostgreSQL에서는 세션별 일별 집계가 별도 필요
-                messages=row.get('count', 0)
-            )
-            for row in analytics.daily_message_counts
-        ]
+                sessions=session_count,
+                messages=msg_count,
+                engagement=engagement
+            ))
 
         # 질문 유형 분포를 top_questions로 변환
         top_questions = [

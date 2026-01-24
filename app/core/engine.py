@@ -586,7 +586,8 @@ class UniversalEngine:
         question: str,
         conversation_history: List[Dict] = None,
         use_cache: bool = True,
-        request_id: str = None
+        request_id: str = None,
+        question_type: str = None
     ) -> ChatResponse:
         """
         질문 처리 (동기)
@@ -596,6 +597,7 @@ class UniversalEngine:
             conversation_history: 대화 히스토리
             use_cache: 캐시 사용 여부
             request_id: 요청 ID (없으면 자동 생성)
+            question_type: 질문 타입 (지정시 라우팅 건너뜀)
 
         Returns:
             ChatResponse
@@ -652,9 +654,15 @@ class UniversalEngine:
             for middleware in self._middlewares:
                 context = middleware.before_request(context)
 
-            # 1. 질문 라우팅
+            # 1. 질문 라우팅 (question_type이 지정되면 건너뜀)
             routing_start = time.time()
-            question_type = self.router.route(context)
+            if question_type:
+                # 명시적으로 지정된 question_type 사용
+                context.set_question_type(question_type)
+                logger.info(f"Using explicit question_type: {question_type}")
+            else:
+                # 라우터로 자동 감지
+                question_type = self.router.route(context)
             request_metrics.routing_time = time.time() - routing_start
             request_metrics.question_type = question_type
 

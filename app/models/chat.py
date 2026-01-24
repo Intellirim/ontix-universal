@@ -33,21 +33,26 @@ class Message(BaseModel):
 
 class ChatRequest(BaseModel):
     """채팅 요청"""
-    
+
     brand_id: str = Field(..., description="브랜드 ID")
     message: str = Field(..., description="사용자 메시지")
     conversation_history: List[Message] = Field(
         default_factory=list,
         description="대화 히스토리"
     )
+    question_type: Optional[str] = Field(
+        default=None,
+        description="질문 타입 (지정시 라우팅 건너뜀). 예: advisor, analytics, content_generation"
+    )
     stream: bool = Field(default=False, description="스트리밍 여부")
-    
+
     class Config:
         json_schema_extra = {
             "example": {
                 "brand_id": "raceon",
                 "message": "가장 인기있는 글러브 추천해줘",
                 "conversation_history": [],
+                "question_type": None,
                 "stream": False
             }
         }

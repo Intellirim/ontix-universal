@@ -568,20 +568,104 @@ class ChatStorageService:
 
 
 # ============================================
-# In-Memory Fallback Storage
+# File-Based Persistent Storage
 # ============================================
 
-class InMemoryChatStorage:
+class FileChatStorage:
     """
-    PostgreSQL 연결 실패 시 사용되는 인메모리 폴백 스토리지
+    파일 기반 채팅 저장소
 
-    서버 재시작 시 데이터 손실됨 (개발/테스트 용도)
+    PostgreSQL 없이도 데이터를 영구 저장
+    - data/chat/sessions.json: 세션 정보
+    - data/chat/messages/{session_id}.json: 메시지 정보
     """
 
     def __init__(self):
         self._sessions: Dict[str, ChatSession] = {}
         self._messages: Dict[str, List[StoredMessage]] = {}
-        logger.warning("Using in-memory chat storage (PostgreSQL unavailable)")
+
+        # 저장 경로 설정
+        self._data_dir = os.path.join(os.path.dirname(__file__), "..", "..", "..", "data", "chat")
+        self._sessions_file = os.path.join(self._data_dir, "sessions.json")
+        self._messages_dir = os.path.join(self._data_dir, "messages")
+
+        # 디렉토리 생성
+        os.makedirs(self._messages_dir, exist_ok=True)
+
+        # 기존 데이터 로드
+        self._load_data()
+        logger.info(f"File-based chat storage initialized: {len(self._sessions)} sessions loaded")
+
+    def _load_data(self):
+        """저장된 데이터 로드"""
+        try:
+            # 세션 로드
+            if os.path.exists(self._sessions_file):
+                with open(self._sessions_file, 'r', encoding='utf-8') as f:
+                    sessions_data = json.load(f)
+                    for sid, sdata in sessions_data.items():
+                        self._sessions[sid] = ChatSession(
+                            id=sdata['id'],
+                            brand_id=sdata['brand_id'],
+                            user_id=sdata.get('user_id'),
+                            created_at=datetime.fromisoformat(sdata['created_at']),
+                            updated_at=datetime.fromisoformat(sdata['updated_at']),
+                            message_count=sdata.get('message_count', 0),
+                            metadata=sdata.get('metadata', {})
+                        )
+
+            # 메시지 로드
+            if os.path.exists(self._messages_dir):
+                for filename in os.listdir(self._messages_dir):
+                    if filename.endswith('.json'):
+                        session_id = filename[:-5]  # Remove .json
+                        filepath = os.path.join(self._messages_dir, filename)
+                        with open(filepath, 'r', encoding='utf-8') as f:
+                            messages_data = json.load(f)
+                            self._messages[session_id] = [
+                                StoredMessage(
+                                    id=m['id'],
+                                    session_id=m['session_id'],
+                                    role=m['role'],
+                                    content=m['content'],
+                                    timestamp=datetime.fromisoformat(m['timestamp']),
+                                    metadata=m.get('metadata', {})
+                                )
+                                for m in messages_data
+                            ]
+        except Exception as e:
+            logger.error(f"Failed to load chat data: {e}")
+
+    def _save_sessions(self):
+        """세션 데이터 저장"""
+        try:
+            sessions_data = {
+                sid: {
+                    'id': s.id,
+                    'brand_id': s.brand_id,
+                    'user_id': s.user_id,
+                    'created_at': s.created_at.isoformat(),
+                    'updated_at': s.updated_at.isoformat(),
+                    'message_count': s.message_count,
+                    'metadata': s.metadata
+                }
+                for sid, s in self._sessions.items()
+            }
+            with open(self._sessions_file, 'w', encoding='utf-8') as f:
+                json.dump(sessions_data, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logger.error(f"Failed to save sessions: {e}")
+
+    def _save_messages(self, session_id: str):
+        """특정 세션의 메시지 저장"""
+        try:
+            messages = self._messages.get(session_id, [])
+            messages_data = [m.to_dict() for m in messages]
+            filepath = os.path.join(self._messages_dir, f"{session_id}.json")
+            with open(filepath, 'w', encoding='utf-8') as f:
+                json.dump(messages_data, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logger.error(f"Failed to save messages for session {session_id}: {e}")
 
     def create_session(
         self,
@@ -589,7 +673,7 @@ class InMemoryChatStorage:
         user_id: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None
     ) -> ChatSession:
-        session_id = str(uuid.uuid4())
+        session_id = f"session_{uuid.uuid4().hex[:12]}"
         now = datetime.utcnow()
         session = ChatSession(
             id=session_id,
@@ -602,6 +686,7 @@ class InMemoryChatStorage:
         )
         self._sessions[session_id] = session
         self._messages[session_id] = []
+        self._save_sessions()  # 즉시 저장
         return session
 
     def get_session(self, session_id: str) -> Optional[ChatSession]:
@@ -638,7 +723,7 @@ class InMemoryChatStorage:
         metadata: Optional[Dict[str, Any]] = None
     ) -> StoredMessage:
         message = StoredMessage(
-            id=str(uuid.uuid4()),
+            id=f"msg_{uuid.uuid4().hex[:12]}",
             session_id=session_id,
             role=role,
             content=content,
@@ -653,6 +738,10 @@ class InMemoryChatStorage:
         if session_id in self._sessions:
             self._sessions[session_id].message_count += 1
             self._sessions[session_id].updated_at = datetime.utcnow()
+            self._save_sessions()  # 세션 업데이트 저장
+
+        # 메시지 저장
+        self._save_messages(session_id)
 
         return message
 
@@ -696,7 +785,68 @@ class InMemoryChatStorage:
         }
 
     def get_analytics(self, brand_id: str, days: int = 30) -> ChatAnalytics:
-        return ChatAnalytics()
+        """채팅 분석 데이터 조회"""
+        since = datetime.utcnow() - timedelta(days=days)
+
+        # 브랜드의 세션들
+        brand_sessions = [s for s in self._sessions.values()
+                         if s.brand_id == brand_id and s.created_at >= since]
+
+        session_count = len(brand_sessions)
+        session_ids = [s.id for s in brand_sessions]
+
+        # 메시지 통계
+        all_messages = []
+        for sid in session_ids:
+            all_messages.extend(self._messages.get(sid, []))
+
+        message_count = len(all_messages)
+        avg_messages = message_count / session_count if session_count > 0 else 0
+
+        # Grade 분포
+        grades = [m.metadata.get('grade') for m in all_messages
+                  if m.role == 'assistant' and m.metadata.get('grade')]
+        grade_distribution = {}
+        for g in grades:
+            grade_distribution[g] = grade_distribution.get(g, 0) + 1
+
+        # Question Type 분포
+        qtypes = [m.metadata.get('question_type') for m in all_messages
+                  if m.role == 'assistant' and m.metadata.get('question_type')]
+        question_type_distribution = {}
+        for qt in qtypes:
+            question_type_distribution[qt] = question_type_distribution.get(qt, 0) + 1
+
+        # 평균 응답 시간
+        response_times = [m.metadata.get('response_time_ms') for m in all_messages
+                         if m.role == 'assistant' and m.metadata.get('response_time_ms')]
+        avg_response_time = sum(response_times) / len(response_times) if response_times else 0
+
+        # 일별 메시지 수
+        daily_counts: Dict[str, int] = {}
+        for m in all_messages:
+            date_str = m.timestamp.strftime('%Y-%m-%d')
+            daily_counts[date_str] = daily_counts.get(date_str, 0) + 1
+
+        daily_message_counts = [
+            {"date": d, "count": c}
+            for d, c in sorted(daily_counts.items(), reverse=True)
+        ][:30]
+
+        return ChatAnalytics(
+            total_sessions=session_count,
+            total_messages=message_count,
+            avg_messages_per_session=avg_messages,
+            avg_response_time_ms=avg_response_time,
+            grade_distribution=grade_distribution,
+            question_type_distribution=question_type_distribution,
+            daily_message_counts=daily_message_counts,
+            top_topics=[]
+        )
+
+    def count_sessions(self, brand_id: str) -> int:
+        """브랜드별 세션 수"""
+        return len([s for s in self._sessions.values() if s.brand_id == brand_id])
 
 
 # Singleton instance
@@ -708,7 +858,7 @@ def get_chat_storage():
     """
     채팅 저장 서비스 싱글톤
 
-    PostgreSQL 연결 실패 시 자동으로 인메모리 폴백 사용
+    PostgreSQL 연결 실패 시 파일 기반 저장소 사용
     """
     global _chat_storage, _storage_type
 
@@ -720,9 +870,9 @@ def get_chat_storage():
             logger.info("Chat storage: PostgreSQL connected")
         except Exception as e:
             logger.warning(f"PostgreSQL unavailable: {e}")
-            logger.warning("Falling back to in-memory chat storage")
-            _chat_storage = InMemoryChatStorage()
-            _storage_type = "memory"
+            logger.info("Using file-based chat storage")
+            _chat_storage = FileChatStorage()
+            _storage_type = "file"
 
     return _chat_storage
 

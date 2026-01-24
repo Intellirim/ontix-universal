@@ -167,17 +167,33 @@ def _hash_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
 
 
+def _generate_secure_password(length: int = 12) -> str:
+    """보안 비밀번호 생성"""
+    import string
+    alphabet = string.ascii_letters + string.digits + "!@#$%"
+    return ''.join(secrets.choice(alphabet) for _ in range(length))
+
+
 def _load_users() -> dict:
     """사용자 목록 로드"""
     _ensure_data_dir()
     if not os.path.exists(USERS_FILE):
-        # 기본 슈퍼 어드민 생성
+        # 슈퍼 어드민 (어려운 비밀번호)
+        super_admin_password = "OntixSuperAdmin2026"
+
+        # 브랜드별 오너 계정 자동 생성
+        brand_configs = [
+            ("richesseclub", "Richesse Club", "richesse@ontix.io"),
+            ("futurebiofficial", "Future BI", "futurebi@ontix.io"),
+            ("ontix-intelligence", "ONTIX Intelligence", "intelligence@ontix.io"),
+        ]
+
         default_users = {
-            "admin": {
-                "id": "admin",
-                "email": "admin@ontix.io",
-                "name": "Super Admin",
-                "password_hash": _hash_password("admin123"),  # 변경 필요!
+            "superadmin": {
+                "id": "superadmin",
+                "email": "superadmin@ontix.io",
+                "name": "ONTIX Super Admin",
+                "password_hash": _hash_password(super_admin_password),
                 "role": Role.SUPER_ADMIN.value,
                 "brand_ids": [],
                 "is_active": True,
@@ -185,8 +201,33 @@ def _load_users() -> dict:
                 "last_login": None
             }
         }
+
+        # 브랜드 오너 계정 생성
+        for brand_id, brand_name, email in brand_configs:
+            user_id = f"owner_{brand_id}"
+            password = f"{brand_id.capitalize()}@2026"
+            default_users[user_id] = {
+                "id": user_id,
+                "email": email,
+                "name": f"{brand_name} Owner",
+                "password_hash": _hash_password(password),
+                "role": Role.CLIENT_ADMIN.value,
+                "brand_ids": [brand_id],
+                "is_active": True,
+                "created_at": datetime.utcnow().isoformat(),
+                "last_login": None
+            }
+
         _save_users(default_users)
-        logger.warning("⚠️ Created default admin user (admin@ontix.io / admin123) - CHANGE PASSWORD!")
+        logger.warning("=" * 60)
+        logger.warning("🔐 DEFAULT ACCOUNTS CREATED:")
+        logger.warning("-" * 60)
+        logger.warning(f"  Super Admin: superadmin@ontix.io / {super_admin_password}")
+        logger.warning("-" * 60)
+        for brand_id, brand_name, email in brand_configs:
+            password = f"{brand_id.capitalize()}@2026"
+            logger.warning(f"  {brand_name}: {email} / {password}")
+        logger.warning("=" * 60)
         return default_users
 
     with open(USERS_FILE, "r", encoding="utf-8") as f:

@@ -355,9 +355,11 @@ class Pipeline:
         from app.retrievers.vector import VectorRetriever
         from app.retrievers.stats import StatsRetriever
         from app.retrievers.product import ProductRetriever
+        from app.retrievers.tavily import TavilyRetriever
         from app.generators.factual import FactualGenerator
         from app.generators.insight import InsightGenerator
         from app.generators.conversational import ConversationalGenerator
+        from app.generators.business_advisor import BusinessAdvisorGenerator
 
         # Retrievers 초기화
         self.retrievers = {
@@ -367,11 +369,19 @@ class Pipeline:
             'product': ProductRetriever(brand_config),
         }
 
+        # Tavily retriever 초기화 (별도로 try-except 처리)
+        try:
+            self.retrievers['tavily'] = TavilyRetriever(brand_config)
+            logger.info(f"TavilyRetriever initialized, enabled={self.retrievers['tavily'].tavily.is_enabled}")
+        except Exception as e:
+            logger.warning(f"Failed to initialize TavilyRetriever: {e}")
+
         # Generators 초기화
         self.generators = {
             'factual': FactualGenerator(brand_config),
             'insight': InsightGenerator(brand_config),
             'conversational': ConversationalGenerator(brand_config),
+            'business_advisor': BusinessAdvisorGenerator(brand_config),
         }
 
         # 프롬프트 매니저
@@ -484,6 +494,23 @@ class Pipeline:
         else:
             context = self._retrieve_sequential(context, retrievers_to_use)
 
+        # Tavily web search - 키워드 기반 또는 결과 부족 시 실행
+        tavily_retriever = self.retrievers.get('tavily')
+        logger.info(f"Tavily retriever: {tavily_retriever is not None}, question: {context.question[:50]}")
+
+        if tavily_retriever:
+            should_search = tavily_retriever.should_search(context)
+            logger.info(f"Tavily should_search: {should_search}")
+
+            if should_search:
+                total_before = context.get_total_retrieval_count()
+                logger.info(f"Triggering Tavily web search (current results: {total_before})")
+                try:
+                    result = tavily_retriever.retrieve(context)
+                    logger.info(f"Tavily search completed, result: {result}")
+                except Exception as e:
+                    logger.warning(f"Tavily search failed: {e}")
+
         # 메트릭 업데이트
         total_results = context.get_total_retrieval_count()
         context.mark_retrieval_complete()
@@ -586,17 +613,22 @@ class Pipeline:
         generation_config = self.brand_config.get('generation', {})
         qtype_config = generation_config.get(question_type_str, {})
 
-        # Generator 선택
-        generator_type = qtype_config.get('type', 'conversational')
+        # Generator 선택 - advisor는 business_advisor 사용
+        if question_type_str == 'advisor':
+            generator_type = 'business_advisor'
+            logger.info("Using BusinessAdvisorGenerator for advisor question type")
+        else:
+            generator_type = qtype_config.get('type', 'conversational')
+
         generator = self.generators.get(generator_type)
 
         if not generator:
             logger.warning(f"Unknown generator: {generator_type}, using conversational")
             generator = self.generators['conversational']
 
-        # AI Advisor와 Content Generation은 gpt-5-mini (feature variant) 사용
-        feature_question_types = ['advisor', 'content_generation']
-        if question_type_str in feature_question_types:
+        # AI Advisor, Content Generation, 일반 대화 모두 gpt-5-mini 사용
+        feature_question_types = ['advisor', 'content_generation', 'conversational', 'insight', 'analysis']
+        if question_type_str in feature_question_types or generator_type == 'conversational':
             model_variant = 'feature'  # gpt-5-mini
             logger.info(f"Using feature model (gpt-5-mini) for {question_type_str}")
         else:

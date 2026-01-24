@@ -10,6 +10,7 @@ from app.models.brand import BrandInfo, BrandStats, BrandCreate, BrandUpdate
 from app.services.platform.brand_manager import get_brand_manager
 from app.services.platform.config_manager import ConfigManager
 from app.data_pipeline.repositories.neo4j_repo import Neo4jRepository
+from app.core.auth import create_user, UserCreate, Role, get_user_by_email
 import logging
 
 logger = logging.getLogger(__name__)
@@ -60,6 +61,27 @@ async def create_brand(brand: BrandCreate):
 
         # 브랜드 매니저 캐시 클리어
         get_brand_manager().clear_cache(brand.id)
+
+        # 브랜드 오너 계정 자동 생성
+        email = f"{brand.id}@ontix.io"
+        password = f"{brand.id.replace('-', '').capitalize()}@2026"
+
+        # 이미 존재하는 계정인지 확인
+        existing_user = get_user_by_email(email)
+        if not existing_user:
+            try:
+                new_user = create_user(UserCreate(
+                    email=email,
+                    password=password,
+                    name=f"{brand.name} Owner",
+                    role=Role.CLIENT_ADMIN,
+                    brand_ids=[brand.id]
+                ))
+                logger.info(f"Auto-created user for brand {brand.id}: {email}")
+            except Exception as user_err:
+                logger.warning(f"Failed to create user for brand {brand.id}: {user_err}")
+        else:
+            logger.info(f"User already exists for brand {brand.id}: {email}")
 
         # 생성된 브랜드 정보 반환
         return get_brand_manager().get_brand(brand.id)
@@ -214,6 +236,7 @@ async def get_brand_graph(
     brand_id: str,
     limit: int = Query(default=100, ge=1, le=1000, description="최대 노드 수"),
     node_types: Optional[str] = Query(default=None, description="노드 타입 필터 (콤마로 구분)"),
+    balanced: bool = Query(default=False, description="타입별 균형있게 가져오기 (카드 미리보기용)"),
 ):
     """
     브랜드 지식그래프 시각화 데이터 조회
@@ -224,6 +247,7 @@ async def get_brand_graph(
         brand_id: 브랜드 ID
         limit: 최대 노드 수 (기본값 100, 최대 1000)
         node_types: 필터링할 노드 타입 (콤마로 구분, 예: "Content,Concept,Topic")
+        balanced: True면 타입별로 균형있게 노드를 가져옴 (카드 미리보기용)
 
     Returns:
         nodes: 노드 리스트 (id, label, type, properties)
@@ -239,11 +263,15 @@ async def get_brand_graph(
         if node_types:
             types_list = [t.strip() for t in node_types.split(",") if t.strip()]
 
+        # Debug: balanced 파라미터 확인
+        logger.info(f"Graph API called: brand_id={brand_id}, limit={limit}, balanced={balanced}, type={type(balanced)}")
+
         # 그래프 데이터 조회
         result = repo.get_graph_visualization_data(
             brand_id=brand_id,
             limit=limit,
             node_types=types_list,
+            balanced=balanced,
         )
 
         return result
