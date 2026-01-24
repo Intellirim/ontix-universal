@@ -92,8 +92,7 @@ async def get_advice(
         # 쿼리 컨텍스트 생성
         context = QueryContext(
             question=request.message,
-            brand_id=request.brand_id,
-            brand_config=brand_config
+            brand_id=request.brand_id
         )
 
         # 응답 생성
@@ -111,8 +110,8 @@ async def get_advice(
         }
 
         if metrics:
-            metadata['generation_time_ms'] = metrics.generation_time_ms
-            metadata['llm_tokens'] = metrics.llm_tokens
+            metadata['generation_time_ms'] = metrics.get('generation_time_ms')
+            metadata['llm_tokens'] = metrics.get('llm_tokens')
 
         # 채팅 저장 (백그라운드)
         if request.session_id:
@@ -195,7 +194,6 @@ async def get_advice_with_session(
         context = QueryContext(
             question=request.message,
             brand_id=request.brand_id,
-            brand_config=brand_config,
             conversation_history=conversation_history
         )
 
@@ -215,8 +213,8 @@ async def get_advice_with_session(
         }
 
         if metrics:
-            metadata['generation_time_ms'] = metrics.generation_time_ms
-            metadata['llm_tokens'] = metrics.llm_tokens
+            metadata['generation_time_ms'] = metrics.get('generation_time_ms')
+            metadata['llm_tokens'] = metrics.get('llm_tokens')
 
         # 채팅 저장 (백그라운드)
         background_tasks.add_task(
