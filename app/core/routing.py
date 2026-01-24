@@ -320,15 +320,16 @@ class QuestionRouter:
         # 2. 분류 실행
         result = self._classify(question)
 
-        # 3. 기능 활성화 확인
+        # 3. 기능 활성화 확인 (advisor는 항상 허용)
+        always_allowed = {QuestionType.ADVISOR, QuestionType.CONVERSATIONAL}
         if result.question_type.value not in self.enabled_features:
-            if result.question_type != QuestionType.CONVERSATIONAL:
+            if result.question_type not in always_allowed:
                 logger.warning(
                     f"Type '{result.question_type.value}' not enabled, "
                     f"falling back to 'conversational'"
                 )
-            result.question_type = QuestionType.CONVERSATIONAL
-            result.confidence = max(result.confidence * 0.5, 0.3)
+                result.question_type = QuestionType.CONVERSATIONAL
+                result.confidence = max(result.confidence * 0.5, 0.3)
 
         # 4. 컨텍스트 업데이트
         self._apply_result(context, result)
@@ -404,9 +405,12 @@ class QuestionRouter:
         """키워드 기반 분류"""
         scores = {}
 
+        # advisor는 항상 허용
+        always_allowed = {QuestionType.ADVISOR, QuestionType.CONVERSATIONAL}
+
         for qtype, keywords in self.TYPE_KEYWORDS.items():
-            # 활성화되지 않은 기능은 스킵
-            if qtype.value not in self.enabled_features and qtype != QuestionType.CONVERSATIONAL:
+            # 활성화되지 않은 기능은 스킵 (advisor, conversational 제외)
+            if qtype.value not in self.enabled_features and qtype not in always_allowed:
                 continue
 
             score = 0
