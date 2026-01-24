@@ -28,6 +28,29 @@ from app.services.shared.neo4j import get_neo4j_client
 logger = logging.getLogger(__name__)
 
 
+def _parse_metrics(metrics_str) -> dict:
+    """
+    Parse metrics string like "likes:188,comments:0,shares:0,views:3696"
+    Returns dict with parsed values
+    """
+    result = {'likes': 0, 'comments': 0, 'shares': 0, 'views': 0}
+
+    if not metrics_str or not isinstance(metrics_str, str):
+        return result
+
+    try:
+        for part in metrics_str.split(','):
+            if ':' in part:
+                key, value = part.split(':', 1)
+                key = key.strip().lower()
+                if key in result:
+                    result[key] = int(value.strip())
+    except Exception:
+        pass
+
+    return result
+
+
 @dataclass
 class BrandMetrics:
     """브랜드 전체 메트릭"""
@@ -159,23 +182,30 @@ class BusinessAdvisorGenerator(BaseGenerator):
         metrics = BrandMetrics()
 
         try:
-            # 1. 콘텐츠 통계
-            content_stats = self.neo4j.query("""
+            # 1. 콘텐츠 통계 (metrics 문자열 파싱 지원)
+            content_data = self.neo4j.query("""
                 MATCH (c:Content)
                 WHERE c.brand_id = $brand_id
                 RETURN
-                    count(c) as total,
-                    sum(coalesce(c.like_count, 0)) as likes,
-                    sum(coalesce(c.comment_count, 0)) as comments,
-                    sum(coalesce(c.view_count, 0)) as views
+                    c.like_count as likes,
+                    c.comment_count as comments,
+                    c.view_count as views,
+                    c.metrics as metrics
             """, {'brand_id': self.brand_id})
 
-            if content_stats:
-                row = content_stats[0]
-                metrics.total_content = row.get('total', 0)
-                metrics.total_likes = row.get('likes', 0) or 0
-                metrics.total_comments = row.get('comments', 0) or 0
-                metrics.total_views = row.get('views', 0) or 0
+            total_likes = 0
+            total_comments = 0
+            total_views = 0
+            for row in content_data or []:
+                parsed = _parse_metrics(row.get('metrics'))
+                total_likes += (row.get('likes', 0) or 0) or parsed['likes']
+                total_comments += (row.get('comments', 0) or 0) or parsed['comments']
+                total_views += (row.get('views', 0) or 0) or parsed['views']
+
+            metrics.total_content = len(content_data or [])
+            metrics.total_likes = total_likes
+            metrics.total_comments = total_comments
+            metrics.total_views = total_views
 
             # 2. 인터랙션 감정 분석
             sentiment_stats = self.neo4j.query("""
@@ -202,8 +232,8 @@ class BusinessAdvisorGenerator(BaseGenerator):
                 metrics.sentiment_negative
             )
 
-            # 3. 상위 성과 콘텐츠 (좋아요 기준)
-            top_content = self.neo4j.query("""
+            # 3. 상위 성과 콘텐츠 (좋아요 기준, metrics 파싱 지원)
+            top_content_raw = self.neo4j.query("""
                 MATCH (c:Content)
                 WHERE c.brand_id = $brand_id
                 RETURN
@@ -211,30 +241,37 @@ class BusinessAdvisorGenerator(BaseGenerator):
                     c.url as url,
                     c.platform as platform,
                     coalesce(c.like_count, 0) as likes,
-                    coalesce(c.view_count, 0) as views
-                ORDER BY likes DESC
-                LIMIT 5
+                    coalesce(c.view_count, 0) as views,
+                    c.metrics as metrics
+                LIMIT 100
             """, {'brand_id': self.brand_id})
 
-            metrics.top_content = [
-                {
+            # metrics 파싱 후 정렬
+            top_content_parsed = []
+            for r in (top_content_raw or []):
+                parsed = _parse_metrics(r.get('metrics'))
+                likes = (r.get('likes', 0) or 0) or parsed['likes']
+                views = (r.get('views', 0) or 0) or parsed['views']
+                top_content_parsed.append({
                     'text': (r.get('text') or '')[:200],
                     'url': r.get('url'),
                     'platform': r.get('platform'),
-                    'likes': r.get('likes', 0),
-                    'views': r.get('views', 0),
-                }
-                for r in (top_content or [])
-            ]
+                    'likes': likes,
+                    'views': views,
+                })
+            # 좋아요 순 정렬
+            top_content_parsed.sort(key=lambda x: x['likes'], reverse=True)
+            metrics.top_content = top_content_parsed[:5]
 
-            # 4. 최근 콘텐츠
+            # 4. 최근 콘텐츠 (metrics 파싱 지원)
             recent_content = self.neo4j.query("""
                 MATCH (c:Content)
                 WHERE c.brand_id = $brand_id
                 RETURN
                     c.text as text,
                     c.created_at as created_at,
-                    coalesce(c.like_count, 0) as likes
+                    coalesce(c.like_count, 0) as likes,
+                    c.metrics as metrics
                 ORDER BY c.created_at DESC
                 LIMIT 5
             """, {'brand_id': self.brand_id})
@@ -243,7 +280,7 @@ class BusinessAdvisorGenerator(BaseGenerator):
                 {
                     'text': (r.get('text') or '')[:200],
                     'created_at': str(r.get('created_at')) if r.get('created_at') else None,
-                    'likes': r.get('likes', 0),
+                    'likes': (r.get('likes', 0) or 0) or _parse_metrics(r.get('metrics'))['likes'],
                 }
                 for r in (recent_content or [])
             ]
