@@ -75,13 +75,9 @@ class PatternMatcher:
             r'(최근|이번주|이번달|요즘).*(인기|트렌드|반응)',
             r'(성과|실적|결과).*(어때|어떻게)',
         ],
-        QuestionType.ADVISOR: [
-            r'어떻게.*(하면|해야|할까|할 수)',
-            r'(방법|팁|가이드|조언|노하우)',
-            r'(루틴|순서|단계|절차|프로세스)',
-            r'(효과적|올바른|제대로|잘)',
-            r'(전략|방안|계획).*(세우|알려)',
-        ],
+        # ADVISOR는 명시적으로 question_type을 지정할 때만 작동
+        # 일반 채팅에서는 자동 라우팅되지 않음 (AI Advisor 전용 기능)
+        # QuestionType.ADVISOR: [],
         QuestionType.FACTUAL: [
             r'^(무엇|뭐|어디|언제|누구|왜|어떤)',
             r'(정보|설명|알려|내용)',
@@ -251,10 +247,8 @@ class QuestionRouter:
             '인기', '좋아요', '많은', 'top', '순위', '베스트', '통계',
             '분석', '게시물', '포스트', '트렌드', '조회수', '성과', '실적',
         },
-        QuestionType.ADVISOR: {
-            '어떻게', '방법', '조언', '해야', '하면', '좋을까',
-            '팁', '가이드', '순서', '전략', '노하우',
-        },
+        # ADVISOR는 명시적 요청 시에만 작동 (AI Advisor 페이지 전용)
+        # QuestionType.ADVISOR: {},
         QuestionType.FACTUAL: {
             '무엇', '뭐야', '어디', '언제', '누구', '어떤', '설명',
             '정보', '알려줘', '뭔가요', '내용', '있어', '있나요',
@@ -321,7 +315,7 @@ class QuestionRouter:
         result = self._classify(question)
 
         # 3. 기능 활성화 확인 (advisor는 항상 허용)
-        always_allowed = {QuestionType.ADVISOR, QuestionType.CONVERSATIONAL}
+        always_allowed = {QuestionType.CONVERSATIONAL}
         if result.question_type.value not in self.enabled_features:
             if result.question_type not in always_allowed:
                 logger.warning(
@@ -406,7 +400,7 @@ class QuestionRouter:
         scores = {}
 
         # advisor는 항상 허용
-        always_allowed = {QuestionType.ADVISOR, QuestionType.CONVERSATIONAL}
+        always_allowed = {QuestionType.CONVERSATIONAL}
 
         for qtype, keywords in self.TYPE_KEYWORDS.items():
             # 활성화되지 않은 기능은 스킵 (advisor, conversational 제외)
