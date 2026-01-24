@@ -392,19 +392,31 @@ class SocialMonitoringHandler(FeatureHandler):
             return 'general'
 
     def _fetch_monitoring_data(self, question: str) -> Dict[str, Any]:
-        """모니터링 데이터 조회"""
+        """모니터링 데이터 조회 - Content와 Interaction 노드 사용"""
         try:
             from app.services.shared.neo4j import get_neo4j_client
 
             neo4j = get_neo4j_client()
 
+            # Content와 Interaction 데이터 조회
             query = """
-            MATCH (p:Post)
-            WHERE p.brand_id = $brand_id
-            RETURN p.id as id, p.platform as platform, p.content as content,
-                   p.likes as likes, p.comments as comments,
-                   p.mentions as mentions, p.hashtags as hashtags
-            ORDER BY p.created_at DESC
+            MATCH (c:Content)
+            WHERE c.brand_id = $brand_id
+            OPTIONAL MATCH (c)<-[:BELONGS_TO]-(i:Interaction)
+            WITH c,
+                 count(CASE WHEN i.type = 'like' THEN 1 END) as likes,
+                 count(CASE WHEN i.type = 'comment' THEN 1 END) as comments,
+                 collect(CASE WHEN i.type = 'comment' THEN {text: i.text, sentiment: i.sentiment} END)[0..5] as recent_comments
+            RETURN c.id as id,
+                   c.platform as platform,
+                   c.caption as content,
+                   c.content_type as content_type,
+                   likes,
+                   comments,
+                   c.hashtags as hashtags,
+                   recent_comments,
+                   c.posted_at as posted_at
+            ORDER BY c.posted_at DESC
             LIMIT $limit
             """
 
@@ -412,6 +424,15 @@ class SocialMonitoringHandler(FeatureHandler):
                 'brand_id': self.brand_id,
                 'limit': self.handler_config.max_results,
             }) or []
+
+            # Interaction 감정 분석 요약
+            sentiment_query = """
+            MATCH (c:Content {brand_id: $brand_id})<-[:BELONGS_TO]-(i:Interaction)
+            WHERE i.type = 'comment' AND i.sentiment IS NOT NULL
+            RETURN i.sentiment as sentiment, count(*) as count
+            """
+            sentiment_data = neo4j.query(sentiment_query, {'brand_id': self.brand_id}) or []
+            sentiment_summary = {row['sentiment']: row['count'] for row in sentiment_data}
 
             total_engagement = sum(
                 (item.get('likes', 0) or 0) + (item.get('comments', 0) or 0)
@@ -425,32 +446,44 @@ class SocialMonitoringHandler(FeatureHandler):
                 'items': items,
                 'total_engagement': total_engagement,
                 'platforms_covered': platforms_covered,
+                'sentiment_summary': sentiment_summary,
             }
 
         except Exception as e:
             logger.error(f"[SocialMonitoringHandler] Fetch error: {e}")
-            return {'items': [], 'total_engagement': 0, 'platforms_covered': []}
+            return {'items': [], 'total_engagement': 0, 'platforms_covered': [], 'sentiment_summary': {}}
 
     def _format_monitoring_results(self, data: Dict[str, Any]) -> str:
         """모니터링 결과 포맷팅"""
         items = data.get('items', [])
         total_engagement = data.get('total_engagement', 0)
         platforms = data.get('platforms_covered', [])
+        sentiment_summary = data.get('sentiment_summary', {})
 
         lines = ["📡 **소셜 모니터링 리포트**\n"]
 
         lines.append("**📊 요약**")
-        lines.append(f"- 모니터링 항목: {len(items)}개")
+        lines.append(f"- 콘텐츠 수: {len(items)}개")
         lines.append(f"- 총 인게이지먼트: {total_engagement:,}")
         lines.append(f"- 플랫폼: {', '.join(platforms) if platforms else 'N/A'}")
+
+        # 감정 분석 요약
+        if sentiment_summary:
+            positive = sentiment_summary.get('positive', 0)
+            neutral = sentiment_summary.get('neutral', 0)
+            negative = sentiment_summary.get('negative', 0)
+            total_sentiment = positive + neutral + negative
+            if total_sentiment > 0:
+                lines.append(f"- 댓글 감정: 😊 {positive}개 ({positive*100//total_sentiment}%) | 😐 {neutral}개 | 😟 {negative}개")
         lines.append("")
 
-        lines.append("**📝 최근 활동**")
+        lines.append("**📝 최근 콘텐츠**")
         for i, item in enumerate(items[:5], 1):
             platform = item.get('platform', 'unknown')
-            content = (item.get('content', '') or '')[:40]
+            content = (item.get('content', '') or '')[:50]
             likes = item.get('likes', 0) or 0
             comments = item.get('comments', 0) or 0
+            content_type = item.get('content_type', '')
 
             platform_emoji = {
                 'instagram': '📸',
@@ -459,8 +492,18 @@ class SocialMonitoringHandler(FeatureHandler):
                 'tiktok': '🎵',
             }.get(platform, '📱')
 
-            lines.append(f"{i}. {platform_emoji} [{platform}] {content}...")
+            type_tag = f"[{content_type}] " if content_type else ""
+            lines.append(f"{i}. {platform_emoji} {type_tag}{content}...")
             lines.append(f"   ❤️ {likes:,} | 💬 {comments:,}")
+
+            # 최근 댓글 표시
+            recent_comments = item.get('recent_comments', [])
+            if recent_comments:
+                for comment in recent_comments[:2]:
+                    if comment and comment.get('text'):
+                        sentiment_emoji = {'positive': '😊', 'neutral': '😐', 'negative': '😟'}.get(comment.get('sentiment', ''), '💬')
+                        comment_text = (comment.get('text', '') or '')[:30]
+                        lines.append(f"      {sentiment_emoji} \"{comment_text}...\"")
 
         lines.append("")
         lines.append("더 자세한 분석이 필요하시면 말씀해주세요!")
