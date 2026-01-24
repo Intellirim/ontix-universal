@@ -25,6 +25,29 @@ from app.services.shared.neo4j import get_neo4j_client
 logger = logging.getLogger(__name__)
 
 
+def _parse_metrics(metrics_str: Optional[str]) -> Dict[str, int]:
+    """
+    Parse metrics string like "likes:188,comments:0,shares:0,views:3696"
+    Returns dict with parsed values
+    """
+    result = {'likes': 0, 'comments': 0, 'shares': 0, 'views': 0}
+
+    if not metrics_str or not isinstance(metrics_str, str):
+        return result
+
+    try:
+        for part in metrics_str.split(','):
+            if ':' in part:
+                key, value = part.split(':', 1)
+                key = key.strip().lower()
+                if key in result:
+                    result[key] = int(value.strip())
+    except Exception:
+        pass
+
+    return result
+
+
 class SearchScope(str, Enum):
     """검색 범위"""
     CONCEPTS = "concepts"
@@ -597,6 +620,7 @@ class GraphRetriever(RetrieverInterface):
                c.like_count as likes,
                c.comment_count as comments,
                c.view_count as views,
+               c.metrics as metrics,
                c.created_at as created_at,
                match_score + (coalesce(c.like_count, 0) / 1000.0) as score
         ORDER BY score DESC, c.created_at DESC
@@ -616,8 +640,16 @@ class GraphRetriever(RetrieverInterface):
 
         results = self.neo4j.query(query, params)
 
-        return [
-            SearchResult(
+        search_results = []
+        for r in results:
+            # metrics 문자열 파싱 (fallback)
+            parsed_metrics = _parse_metrics(r.get('metrics'))
+            likes = r.get('likes', 0) or parsed_metrics['likes']
+            comments = r.get('comments', 0) or parsed_metrics['comments']
+            views = r.get('views', 0) or parsed_metrics['views']
+            shares = parsed_metrics['shares']
+
+            search_results.append(SearchResult(
                 node_type='Content',
                 node_id=r['id'],
                 content=r.get('text', '')[:500],  # 텍스트 잘라내기
@@ -626,14 +658,15 @@ class GraphRetriever(RetrieverInterface):
                     'url': r.get('url'),
                     'platform': r.get('platform'),
                     'content_type': r.get('content_type'),
-                    'likes': r.get('likes', 0),
-                    'comments': r.get('comments', 0),
-                    'views': r.get('views', 0),
+                    'likes': likes,
+                    'comments': comments,
+                    'views': views,
+                    'shares': shares,
                     'created_at': str(r.get('created_at')) if r.get('created_at') else None,
                 }
-            )
-            for r in results
-        ]
+            ))
+
+        return search_results
 
     def _expand_with_relationships(self, seed_results: List[SearchResult]) -> List[SearchResult]:
         """관계 기반 확장 검색"""
