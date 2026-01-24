@@ -217,11 +217,18 @@ class TavilyRetriever(RetrieverInterface):
         # Check for web search keywords
         question_lower = context.question.lower()
         web_keywords = [
+            # 시장/경쟁 관련
             '경쟁사', '경쟁', 'competitor',
             '트렌드', 'trend', '동향',
             '시장', 'market', '산업', 'industry',
             '뉴스', 'news', '최근', '최신',
             '외부', 'external',
+            # 정보 요청 패턴
+            '알아', '뭐야', '뭐지', '뭐에요', '뭔가요', '무엇',
+            '검색', '찾아', 'search',
+            '정보', '설명해', '알려줘',
+            # 외부 서비스/플랫폼 질문
+            '사이트', '서비스', '플랫폼', '앱', '카페', '커뮤니티',
         ]
 
         matched_keywords = [kw for kw in web_keywords if kw in question_lower]
