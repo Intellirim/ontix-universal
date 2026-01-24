@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any, List
 from app.generators.business_advisor import BusinessAdvisorGenerator
 from app.core.context import QueryContext
-from app.services.brand.config import get_brand_config
+from app.services.platform.config_manager import ConfigManager
 from app.services.chat.chat_storage import get_chat_storage
 import logging
 import time
@@ -79,7 +79,7 @@ async def get_advice(
 
     try:
         # 브랜드 설정 로드
-        brand_config = get_brand_config(request.brand_id)
+        brand_config = ConfigManager.load_brand_config(request.brand_id)
         if not brand_config:
             raise HTTPException(
                 status_code=404,
@@ -166,7 +166,7 @@ async def get_advice_with_session(
 
     try:
         # 브랜드 설정 로드
-        brand_config = get_brand_config(request.brand_id)
+        brand_config = ConfigManager.load_brand_config(request.brand_id)
         if not brand_config:
             raise HTTPException(
                 status_code=404,
