@@ -195,7 +195,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 # ============================================
 # API 라우터 등록
 # ============================================
-from app.api.v1 import chat, brands, features, admin, alerts, pipeline, auth, crawler, social, analytics, products, onboarding, content
+from app.api.v1 import chat, brands, features, admin, alerts, pipeline, auth, crawler, social, analytics, products, onboarding, content, advisor
 
 app.include_router(
     chat.router,
@@ -275,6 +275,12 @@ app.include_router(
     content.router,
     prefix="/api/v1",
     tags=["Content Generation"]
+)
+
+app.include_router(
+    advisor.router,
+    prefix="/api/v1",
+    tags=["AI Advisor"]
 )
 
 
