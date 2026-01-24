@@ -404,19 +404,17 @@ class SocialMonitoringHandler(FeatureHandler):
             WHERE c.brand_id = $brand_id
             OPTIONAL MATCH (c)<-[:BELONGS_TO]-(i:Interaction)
             WITH c,
-                 count(CASE WHEN i.type = 'like' THEN 1 END) as likes,
-                 count(CASE WHEN i.type = 'comment' THEN 1 END) as comments,
-                 collect(CASE WHEN i.type = 'comment' THEN {text: i.text, sentiment: i.sentiment} END)[0..5] as recent_comments
+                 count(i) as interaction_count,
+                 collect({text: i.text, sentiment: i.sentiment})[0..5] as recent_interactions
             RETURN c.id as id,
                    c.platform as platform,
-                   c.caption as content,
+                   coalesce(c.caption, c.text) as content,
                    c.content_type as content_type,
-                   likes,
-                   comments,
+                   interaction_count as comments,
                    c.hashtags as hashtags,
-                   recent_comments,
-                   c.posted_at as posted_at
-            ORDER BY c.posted_at DESC
+                   recent_interactions,
+                   c.created_at as posted_at
+            ORDER BY c.created_at DESC
             LIMIT $limit
             """
 
@@ -427,8 +425,8 @@ class SocialMonitoringHandler(FeatureHandler):
 
             # Interaction 감정 분석 요약
             sentiment_query = """
-            MATCH (c:Content {brand_id: $brand_id})<-[:BELONGS_TO]-(i:Interaction)
-            WHERE i.type = 'comment' AND i.sentiment IS NOT NULL
+            MATCH (i:Interaction {brand_id: $brand_id})
+            WHERE i.sentiment IS NOT NULL
             RETURN i.sentiment as sentiment, count(*) as count
             """
             sentiment_data = neo4j.query(sentiment_query, {'brand_id': self.brand_id}) or []
@@ -497,13 +495,13 @@ class SocialMonitoringHandler(FeatureHandler):
             lines.append(f"   ❤️ {likes:,} | 💬 {comments:,}")
 
             # 최근 댓글 표시
-            recent_comments = item.get('recent_comments', [])
-            if recent_comments:
-                for comment in recent_comments[:2]:
-                    if comment and comment.get('text'):
-                        sentiment_emoji = {'positive': '😊', 'neutral': '😐', 'negative': '😟'}.get(comment.get('sentiment', ''), '💬')
-                        comment_text = (comment.get('text', '') or '')[:30]
-                        lines.append(f"      {sentiment_emoji} \"{comment_text}...\"")
+            recent_interactions = item.get('recent_interactions', [])
+            if recent_interactions:
+                for interaction in recent_interactions[:2]:
+                    if interaction and interaction.get('text'):
+                        sentiment_emoji = {'positive': '😊', 'neutral': '😐', 'negative': '😟'}.get(interaction.get('sentiment', ''), '💬')
+                        interaction_text = (interaction.get('text', '') or '')[:30]
+                        lines.append(f"      {sentiment_emoji} \"{interaction_text}...\"")
 
         lines.append("")
         lines.append("더 자세한 분석이 필요하시면 말씀해주세요!")

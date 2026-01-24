@@ -110,11 +110,9 @@ async def get_social_monitoring(
 
         # Interaction 노드에서 감성 데이터 조회 (댓글 반응)
         interactions_query = """
-        MATCH (i:Interaction)
-        WHERE i.brand_id = $brand_id
-        RETURN
-            coalesce(i.sentiment, 'neutral') as sentiment,
-            count(*) as count
+        MATCH (i:Interaction {brand_id: $brand_id})
+        WHERE i.sentiment IS NOT NULL
+        RETURN i.sentiment as sentiment, count(*) as count
         """
         interactions = neo4j.query(interactions_query, {'brand_id': brand_id}) or []
         interaction_sentiments = {row['sentiment']: row['count'] for row in interactions}
