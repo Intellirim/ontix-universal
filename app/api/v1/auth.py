@@ -121,6 +121,47 @@ async def change_password(
     return {"message": "Password changed successfully"}
 
 
+class ProfileUpdate(BaseModel):
+    email: Optional[str] = None
+    name: Optional[str] = None
+
+
+@router.patch("/me")
+async def update_profile(
+    data: ProfileUpdate,
+    request: Request,
+    user: User = Depends(get_current_user)
+):
+    """
+    프로필 수정 (아이디, 이름)
+    """
+    from app.core.auth import _load_users, _save_users
+
+    users = _load_users()
+    if user.id not in users:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # 아이디(이메일) 중복 확인
+    if data.email and data.email != user.email:
+        for uid, u in users.items():
+            if uid != user.id and u.get("email") == data.email:
+                raise HTTPException(status_code=400, detail="이미 사용중인 아이디입니다")
+        users[user.id]["email"] = data.email
+
+    if data.name:
+        users[user.id]["name"] = data.name
+
+    _save_users(users)
+
+    return {
+        "id": user.id,
+        "email": users[user.id]["email"],
+        "name": users[user.id]["name"],
+        "role": user.role.value,
+        "brand_ids": user.brand_ids
+    }
+
+
 # ============================================
 # User Management (Super Admin Only)
 # ============================================
