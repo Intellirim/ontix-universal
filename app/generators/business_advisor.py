@@ -30,8 +30,12 @@ logger = logging.getLogger(__name__)
 
 def _parse_metrics(metrics_str) -> dict:
     """
-    Parse metrics string like "likes:188,comments:0,shares:0,views:3696"
-    Returns dict with parsed values
+    Parse metrics string in various formats:
+    - JSON: {"likes":"65","comments":"0",...} or {"likes":65,...}
+    - Colon-comma: likes:188,comments:0,shares:0,views:3696
+    - Colon-semicolon: likes:4290;comments:77;shares:0;views:0
+    - Equals-semicolon: likes=910; comments=7; shares=0; views=16032
+    - Different keys: like_count:62, comment_count:0, view_count:0
     """
     result = {'likes': 0, 'comments': 0, 'shares': 0, 'views': 0}
 
@@ -39,12 +43,60 @@ def _parse_metrics(metrics_str) -> dict:
         return result
 
     try:
-        for part in metrics_str.split(','):
-            if ':' in part:
-                key, value = part.split(':', 1)
-                key = key.strip().lower()
-                if key in result:
-                    result[key] = int(value.strip())
+        import json
+
+        # Try JSON format first
+        if metrics_str.strip().startswith('{'):
+            try:
+                data = json.loads(metrics_str)
+                # Map various key names to standard keys
+                key_mapping = {
+                    'likes': 'likes', 'like_count': 'likes', 'like': 'likes',
+                    'comments': 'comments', 'comment_count': 'comments', 'comment': 'comments',
+                    'shares': 'shares', 'share_count': 'shares', 'share': 'shares',
+                    'views': 'views', 'view_count': 'views', 'view': 'views',
+                }
+                for key, value in data.items():
+                    normalized_key = key_mapping.get(key.lower())
+                    if normalized_key:
+                        try:
+                            result[normalized_key] = int(value) if value else 0
+                        except (ValueError, TypeError):
+                            result[normalized_key] = int(str(value).strip()) if value else 0
+                return result
+            except json.JSONDecodeError:
+                pass
+
+        # Key name mapping
+        key_mapping = {
+            'likes': 'likes', 'like_count': 'likes', 'like': 'likes',
+            'comments': 'comments', 'comment_count': 'comments', 'comment': 'comments',
+            'shares': 'shares', 'share_count': 'shares', 'share': 'shares',
+            'views': 'views', 'view_count': 'views', 'view': 'views',
+        }
+
+        # Try different separators: comma, semicolon
+        for separator in [',', ';']:
+            if separator in metrics_str:
+                parts = metrics_str.split(separator)
+                for part in parts:
+                    part = part.strip()
+                    # Try both : and = as key-value separator
+                    for kv_sep in [':', '=']:
+                        if kv_sep in part:
+                            key, value = part.split(kv_sep, 1)
+                            key = key.strip().lower()
+                            normalized_key = key_mapping.get(key)
+                            if normalized_key:
+                                try:
+                                    result[normalized_key] = int(value.strip())
+                                except (ValueError, TypeError):
+                                    pass
+                            break
+                # If we found any values, return
+                if any(v > 0 for v in result.values()):
+                    return result
+
     except Exception:
         pass
 
