@@ -14,6 +14,10 @@ from app.services.platform.config_manager import ConfigManager
 from app.services.crawlers.web_crawler import get_web_crawler_service, WebCrawlRequest
 
 logger = logging.getLogger(__name__)
+
+# Auto-shutdown configuration
+AUTO_SHUTDOWN_ENABLED = True
+AUTO_SHUTDOWN_DELAY_MINUTES = 5  # 모든 작업 완료 후 5분 대기
 router = APIRouter(prefix="/pipeline")
 
 # 파이프라인 실행 상태 저장 (실제 프로덕션에서는 Redis 등 사용)
@@ -93,6 +97,55 @@ def add_job_log(job_id: str, message: str, level: str = "info"):
     # 최대 로그 수 제한
     if len(pipeline_jobs[job_id]["logs"]) > MAX_LOGS_PER_JOB:
         pipeline_jobs[job_id]["logs"] = pipeline_jobs[job_id]["logs"][-MAX_LOGS_PER_JOB:]
+
+
+def has_running_jobs() -> bool:
+    """실행 중인 작업이 있는지 확인"""
+    for job in pipeline_jobs.values():
+        if job.get("status") in ["pending", "running"]:
+            return True
+    return False
+
+
+async def trigger_auto_shutdown():
+    """자동 종료 트리거 (모든 작업 완료 후)"""
+    if not AUTO_SHUTDOWN_ENABLED:
+        return
+
+    if has_running_jobs():
+        logger.info("Auto-shutdown skipped: other jobs still running")
+        return
+
+    logger.info(f"All jobs completed. Scheduling auto-shutdown in {AUTO_SHUTDOWN_DELAY_MINUTES} minutes")
+
+    # 백그라운드에서 대기 후 종료
+    asyncio.create_task(_delayed_shutdown())
+
+
+async def _delayed_shutdown():
+    """지연된 자동 종료 실행"""
+    await asyncio.sleep(AUTO_SHUTDOWN_DELAY_MINUTES * 60)
+
+    # 다시 확인 - 대기 중에 새 작업이 시작되었을 수 있음
+    if has_running_jobs():
+        logger.info("Auto-shutdown cancelled: new jobs started")
+        return
+
+    try:
+        import httpx
+        from app.api.v1.pipeline_control import LAMBDA_URL
+
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.post(
+                LAMBDA_URL,
+                json={"action": "stop"}
+            )
+            if response.status_code == 200:
+                logger.info("✅ Pipeline EC2 auto-shutdown successful")
+            else:
+                logger.error(f"Auto-shutdown failed: {response.text}")
+    except Exception as e:
+        logger.error(f"Auto-shutdown error: {e}")
 
 
 def cleanup_old_jobs():
@@ -204,11 +257,17 @@ async def run_pipeline_task(job_id: str, request: PipelineRunRequest):
 
         logger.info(f"Pipeline job {job_id} completed: {stats['saved_nodes']} nodes saved")
 
+        # 자동 종료 트리거
+        await trigger_auto_shutdown()
+
     except Exception as e:
         logger.error(f"Pipeline job {job_id} failed: {e}")
         add_job_log(job_id, f"❌ 오류 발생: {str(e)}", "error")
         pipeline_jobs[job_id]["status"] = "failed"
         pipeline_jobs[job_id]["error"] = str(e)
+
+        # 실패해도 자동 종료 트리거 (다른 작업 없으면)
+        await trigger_auto_shutdown()
 
 
 async def _run_website_crawler(job_id: str, request: PipelineRunRequest):
@@ -305,6 +364,9 @@ async def _run_website_crawler(job_id: str, request: PipelineRunRequest):
             add_job_log(job_id, "✅ 웹 크롤링 작업 완료!", "info")
 
             logger.info(f"Website crawler job {job_id} completed: {job.result.total_pages} pages crawled")
+
+            # 자동 종료 트리거
+            await trigger_auto_shutdown()
         else:
             raise ValueError(f"Crawler failed: {job.error or 'Unknown error'}")
 
@@ -312,6 +374,9 @@ async def _run_website_crawler(job_id: str, request: PipelineRunRequest):
         logger.error(f"Website crawler job {job_id} failed: {e}")
         pipeline_jobs[job_id]["status"] = "failed"
         pipeline_jobs[job_id]["error"] = str(e)
+
+        # 실패해도 자동 종료 트리거
+        await trigger_auto_shutdown()
 
 
 def _build_crawl_input(
