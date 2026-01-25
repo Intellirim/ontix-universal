@@ -20,7 +20,18 @@ def lambda_handler(event, context):
         - stop: EC2 종료
         - status: 현재 상태 조회
     """
-    action = event.get('action', 'status')
+    import json
+
+    # Function URL인 경우 body에서 파싱
+    if 'body' in event:
+        try:
+            body = json.loads(event['body']) if isinstance(event['body'], str) else event['body']
+            action = body.get('action', 'status')
+        except:
+            action = 'status'
+    else:
+        # 직접 호출인 경우
+        action = event.get('action', 'status')
 
     try:
         if action == 'start':
