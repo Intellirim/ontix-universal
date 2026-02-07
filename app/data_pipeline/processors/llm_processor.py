@@ -482,155 +482,51 @@ class PromptBuilder:
     동적 프롬프트 생성기.
 
     플랫폼과 브랜드 설정에 따라 LLM 프롬프트를 동적으로 생성합니다.
+    엔티티 추출 프롬프트는 외부 파일에서 로드합니다.
     """
+
+    _cached_prompt: Optional[str] = None
+
+    @classmethod
+    def _load_prompt_file(cls) -> str:
+        """외부 프롬프트 파일 로드 (캐싱)"""
+        if cls._cached_prompt is not None:
+            return cls._cached_prompt
+
+        prompt_path = os.getenv(
+            "ENTITY_EXTRACTION_PROMPT_PATH",
+            os.path.join(os.path.dirname(__file__), "..", "..", "..", "prompts", "default_extraction.txt"),
+        )
+        prompt_path = os.path.abspath(prompt_path)
+
+        try:
+            with open(prompt_path, "r", encoding="utf-8") as f:
+                cls._cached_prompt = f.read().strip()
+            logger.info(f"Loaded extraction prompt from: {prompt_path}")
+        except FileNotFoundError:
+            logger.warning(f"Prompt file not found: {prompt_path}. Using built-in default.")
+            cls._cached_prompt = cls._default_prompt()
+
+        return cls._cached_prompt
+
+    @staticmethod
+    def _default_prompt() -> str:
+        """파일이 없을 때 사용하는 최소 기본 프롬프트"""
+        return (
+            "You are a knowledge graph builder. "
+            "Extract entities and relationships from the given social media text.\n\n"
+            "Create nodes with labels: Brand, Concept, Content, Interaction.\n"
+            "Create relationships: HAS_CONCEPT, HAS_CONTENT, MENTIONS_CONCEPT, "
+            "HAS_INTERACTION, CREATED_BY, RELATED_TO.\n\n"
+            "Every node MUST have a 'brand_id' property extracted from the "
+            "'=== BRAND INFORMATION ===' section in the input.\n"
+            "Content ID must be extracted from the URL, not generated."
+        )
 
     @staticmethod
     def build_system_prompt() -> str:
-        """시스템 프롬프트 생성"""
-        return '''You are an expert knowledge graph builder for brand analysis across multiple social media platforms.
-
-# CRITICAL INSTRUCTION: EXTRACT BRAND FROM INPUT
-
-The input text contains "=== BRAND INFORMATION ===".
-You MUST extract the Brand ID and Name from that section.
-Use them for ALL nodes - do NOT hardcode any specific brand name.
-
-# 4-LAYER HIERARCHY (MANDATORY)
-
-Layer 1: Brand (Hub)
-- ONE central node per brand
-- ALL other nodes connect to this hub (directly or indirectly)
-- Properties: id, name, brand_id, philosophy, category
-
-Layer 2: Concept (Keywords/Topics)
-- SHORT keywords (1-3 words): "면도", "Ataraxia", "자기관리", "혁신"
-- REUSABLE across multiple contents within same brand
-- Properties: id, brand_id, canonical_name, type, synonyms, description
-
-Layer 3: Content (Posts/Videos/Tweets)
-- ONE node per social media content
-- Platform-agnostic representation
-- Properties: id, brand_id, platform, url, text, created_at, metrics
-
-Layer 4: Interaction (Comments/Replies)
-- ONE node per user interaction
-- Properties: id, brand_id, platform, author, text
-
-# NODE CREATION RULES
-
-## 1. Brand Node (ALWAYS CREATE ONE)
-Label: Brand
-Properties:
-- id: Brand Name (extract from input header)
-- name: Brand Name (English if available)
-- brand_id: CRITICAL! Extract from "Brand ID:" line in input
-- philosophy: Brief brand philosophy
-- category: Brand category
-
-## 2. Concept Nodes (REUSABLE KEYWORDS)
-Label: Concept
-Properties:
-- id: SHORT keyword (2-6 chars in Korean, or 3-10 chars in English)
-- brand_id: CRITICAL! Must match Brand ID from input
-- canonical_name: Official name
-- type: PHILOSOPHY | ACTION | PRODUCT | PERSON | EVENT | EMOTION | OTHER
-- synonyms: Alternative names
-- description: Detailed explanation (1-3 sentences)
-
-CRITICAL RULES:
-- Merge duplicate concepts! Same meaning = ONE node with synonyms
-- Extract 3-7 core concepts per content
-- Focus on brand's core concepts from input header
-
-## 3. Content Nodes (ONE PER CONTENT) - UNIVERSAL
-Label: Content
-Properties:
-- id: EXTRACT from URL using platform-specific patterns
-- brand_id: CRITICAL! Must match Brand ID
-- platform: "instagram" | "youtube" | "tiktok" | "twitter"
-- content_type: "post" | "video" | "reel" | "short" | "tweet"
-- url: Full content URL
-- text: Complete content text
-- created_at: Timestamp (ISO format if available)
-- metrics: Platform-specific engagement metrics
-
-## 4. Interaction Nodes (ONE PER INTERACTION)
-Label: Interaction
-Properties:
-- id: Format "interaction_[CONTENT_ID]_[NUMBER]"
-- brand_id: CRITICAL! Same as content's brand_id
-- platform: Same as content's platform
-- author: Username of the commenter
-- text: Interaction text
-- sentiment: "positive" | "negative" | "neutral"
-
-# RELATIONSHIP RULES
-
-## Brand → Concept
-- (Brand)-[:HAS_CONCEPT]->(Concept)
-- MANDATORY for ALL Concepts
-
-## Brand → Content
-- (Brand)-[:HAS_CONTENT]->(Content)
-- Links all brand content to hub
-
-## Concept → Concept
-- CAUSES: Cause-effect relationship
-- RELATED_TO: General association
-- STEP_OF_ROUTINE: Part of a routine/process
-- TARGETS_PROBLEM: Solution → Problem
-- PROVIDES_EFFECT: Action → Effect
-- LEADS_TO: Sequential relationship
-
-## Content → Concept
-- (Content)-[:MENTIONS_CONCEPT]->(Concept)
-- Property: confidence (0.0 to 1.0)
-- Extract 3-7 concepts per content
-
-## Content → Interaction
-- (Content)-[:HAS_INTERACTION]->(Interaction)
-
-## Interaction → Concept
-- (Interaction)-[:MENTIONS_CONCEPT]->(Concept) with confidence
-- (Interaction)-[:EXPRESSES_SENTIMENT]->(Concept)
-
-## Content → Actor (if provided)
-- (Content)-[:CREATED_BY]->(Actor)
-
-# PLATFORM-SPECIFIC GUIDELINES
-
-## Instagram
-- Content types: post, reel, story
-- Key metrics: likes, comments, shares, saves
-- Extract hashtags as potential concepts
-
-## YouTube
-- Content types: video, short
-- Key metrics: views, likes, comments
-- Consider video title and description
-
-## TikTok
-- Content types: video
-- Key metrics: plays, likes, shares, comments
-- Focus on trending sounds/effects as concepts
-
-## Twitter
-- Content types: tweet
-- Key metrics: retweets, likes, replies, quotes
-- Consider threads as connected content
-
-# CRITICAL REMINDERS
-
-1. Extract Brand ID from input text header (under "=== BRAND INFORMATION ===")
-2. EVERY node MUST have 'brand_id' property
-3. Content ID comes from URL extraction (NOT "content_001"!)
-4. Use "Content" and "Interaction" labels (NOT "Post" or "Comment")
-5. Extract 3-7 concepts per content
-6. Merge duplicate concepts with synonyms
-7. Connect Brand to ALL Concepts via HAS_CONCEPT
-
-FAILURE TO ADD BRAND_ID = SYSTEM FAILURE!
-FAILURE TO EXTRACT CONTENT ID FROM URL = DATA CORRUPTION!'''
+        """시스템 프롬프트 생성 (외부 파일에서 로드)"""
+        return PromptBuilder._load_prompt_file()
 
     @classmethod
     def build_brand_header(cls, brand_config: BrandConfig) -> str:

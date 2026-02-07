@@ -138,11 +138,10 @@ app.add_middleware(
 
 # Rate Limiting 미들웨어
 RATE_LIMIT = int(os.getenv("RATE_LIMIT_PER_MINUTE", "60"))
-# 임시 비활성화 - CORS 테스트용
-# app.add_middleware(RateLimitMiddleware, requests_per_minute=RATE_LIMIT)
+app.add_middleware(RateLimitMiddleware, requests_per_minute=RATE_LIMIT)
 
-# 보안 헤더 미들웨어 - 임시 비활성화
-# app.add_middleware(SecurityHeadersMiddleware)
+# 보안 헤더 미들웨어
+app.add_middleware(SecurityHeadersMiddleware)
 
 
 # 요청 로깅 미들웨어

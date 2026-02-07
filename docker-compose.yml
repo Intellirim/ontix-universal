@@ -1,6 +1,3 @@
-### **docker-compose.yml**
-
-```yaml
 # ============================================
 # ONTIX Universal Platform
 # Docker Compose Configuration
@@ -19,7 +16,7 @@ services:
       - "7474:7474"  # HTTP
       - "7687:7687"  # Bolt
     environment:
-      - NEO4J_AUTH=neo4j/password
+      - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD:-changeme}
       - NEO4J_PLUGINS=["apoc"]
       - NEO4J_dbms_security_procedures_unrestricted=apoc.*
     volumes:
@@ -58,12 +55,15 @@ services:
       - APP_ENV=production
       - NEO4J_URI=bolt://neo4j:7687
       - NEO4J_USERNAME=neo4j
-      - NEO4J_PASSWORD=password
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-changeme}
       - REDIS_URL=redis://redis:6379
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - APIFY_TOKEN=${APIFY_TOKEN}
+      - JWT_SECRET=${JWT_SECRET}
     volumes:
-      - ./configs:/app/configs:ro
+      - ./configs:/app/configs
       - ./prompts:/app/prompts:ro
+      - app_data:/app/data
     depends_on:
       - neo4j
       - redis
@@ -78,6 +78,7 @@ volumes:
   neo4j_data:
   neo4j_logs:
   redis_data:
+  app_data:
 
 # ==========================================
 # Networks
@@ -85,6 +86,3 @@ volumes:
 networks:
   ontix-network:
     driver: bridge
-```
-
----

@@ -82,7 +82,7 @@ class Settings(BaseSettings):
     # ============================================
     # CORS Settings
     # ============================================
-    CORS_ORIGINS: str = "*"
+    CORS_ORIGINS: str = "http://localhost:3000"
     CORS_ALLOW_CREDENTIALS: bool = True
 
     # ============================================

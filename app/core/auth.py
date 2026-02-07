@@ -11,6 +11,7 @@ from fastapi import HTTPException, Depends, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import jwt
 import hashlib
+import bcrypt
 import secrets
 import os
 import logging
@@ -22,7 +23,10 @@ logger = logging.getLogger(__name__)
 # Configuration
 # ============================================
 
-JWT_SECRET = os.getenv("JWT_SECRET", "ontix-jwt-secret-change-in-production")
+JWT_SECRET = os.getenv("JWT_SECRET")
+if not JWT_SECRET:
+    JWT_SECRET = secrets.token_hex(32)
+    logger.warning("JWT_SECRET not set! Generated random secret (will change on restart). Set JWT_SECRET env var for production.")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_HOURS = int(os.getenv("JWT_EXPIRE_HOURS", "24"))
 
@@ -163,8 +167,17 @@ def _ensure_data_dir():
 
 
 def _hash_password(password: str) -> str:
-    """비밀번호 해시"""
-    return hashlib.sha256(password.encode()).hexdigest()
+    """비밀번호 해시 (bcrypt)"""
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+
+
+def _verify_password(password: str, password_hash: str) -> bool:
+    """비밀번호 검증 (bcrypt + SHA-256 레거시 호환)"""
+    # bcrypt 해시인 경우 ($2b$ 접두사)
+    if password_hash.startswith("$2b$") or password_hash.startswith("$2a$"):
+        return bcrypt.checkpw(password.encode(), password_hash.encode())
+    # SHA-256 레거시 해시 호환 (마이그레이션 전)
+    return password_hash == hashlib.sha256(password.encode()).hexdigest()
 
 
 def _generate_secure_password(length: int = 12) -> str:
@@ -178,20 +191,13 @@ def _load_users() -> dict:
     """사용자 목록 로드"""
     _ensure_data_dir()
     if not os.path.exists(USERS_FILE):
-        # 슈퍼 어드민 (어려운 비밀번호)
-        super_admin_password = "OntixSuperAdmin2026"
-
-        # 브랜드별 오너 계정 자동 생성
-        brand_configs = [
-            ("richesseclub", "Richesse Club", "richesse@ontix.io"),
-            ("futurebiofficial", "Future BI", "futurebi@ontix.io"),
-            ("ontix-intelligence", "ONTIX Intelligence", "intelligence@ontix.io"),
-        ]
+        # 슈퍼 어드민 (환경변수 또는 랜덤 생성)
+        super_admin_password = os.getenv("ONTIX_ADMIN_PASSWORD") or _generate_secure_password(16)
 
         default_users = {
             "superadmin": {
                 "id": "superadmin",
-                "email": "superadmin@ontix.io",
+                "email": os.getenv("ONTIX_ADMIN_EMAIL", "admin@localhost"),
                 "name": "ONTIX Super Admin",
                 "password_hash": _hash_password(super_admin_password),
                 "role": Role.SUPER_ADMIN.value,
@@ -202,31 +208,13 @@ def _load_users() -> dict:
             }
         }
 
-        # 브랜드 오너 계정 생성
-        for brand_id, brand_name, email in brand_configs:
-            user_id = f"owner_{brand_id}"
-            password = f"{brand_id.capitalize()}@2026"
-            default_users[user_id] = {
-                "id": user_id,
-                "email": email,
-                "name": f"{brand_name} Owner",
-                "password_hash": _hash_password(password),
-                "role": Role.CLIENT_ADMIN.value,
-                "brand_ids": [brand_id],
-                "is_active": True,
-                "created_at": datetime.utcnow().isoformat(),
-                "last_login": None
-            }
-
         _save_users(default_users)
         logger.warning("=" * 60)
-        logger.warning("🔐 DEFAULT ACCOUNTS CREATED:")
-        logger.warning("-" * 60)
-        logger.warning(f"  Super Admin: superadmin@ontix.io / {super_admin_password}")
-        logger.warning("-" * 60)
-        for brand_id, brand_name, email in brand_configs:
-            password = f"{brand_id.capitalize()}@2026"
-            logger.warning(f"  {brand_name}: {email} / {password}")
+        logger.warning("DEFAULT ADMIN ACCOUNT CREATED:")
+        logger.warning(f"  Email: {default_users['superadmin']['email']}")
+        logger.warning(f"  Password: {super_admin_password}")
+        logger.warning("  CHANGE THIS PASSWORD IMMEDIATELY!")
+        logger.warning("  Set ONTIX_ADMIN_PASSWORD env var to customize.")
         logger.warning("=" * 60)
         return default_users
 
@@ -278,11 +266,16 @@ def get_user_by_id(user_id: str) -> Optional[User]:
 
 
 def verify_password(email: str, password: str) -> Optional[User]:
-    """비밀번호 검증"""
+    """비밀번호 검증 (bcrypt + SHA-256 레거시 자동 마이그레이션)"""
     users = _load_users()
     for user_data in users.values():
         if user_data.get("email") == email:
-            if user_data.get("password_hash") == _hash_password(password):
+            stored_hash = user_data.get("password_hash", "")
+            if _verify_password(password, stored_hash):
+                # SHA-256 레거시 해시인 경우 bcrypt로 자동 마이그레이션
+                if not stored_hash.startswith("$2b$") and not stored_hash.startswith("$2a$"):
+                    user_data["password_hash"] = _hash_password(password)
+                    logger.info(f"Migrated password hash to bcrypt for user: {email}")
                 # 마지막 로그인 시간 업데이트
                 user_data["last_login"] = datetime.utcnow().isoformat()
                 _save_users(users)

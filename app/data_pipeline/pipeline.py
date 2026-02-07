@@ -1468,6 +1468,7 @@ async def main():
     parser.add_argument("--platform", type=str, required=True, help="Platform (instagram/youtube/tiktok/twitter)")
     parser.add_argument("--brand-id", type=str, required=True, help="Brand ID")
     parser.add_argument("--brand-name", type=str, required=True, help="Brand name")
+    parser.add_argument("--target", type=str, nargs="+", help="Targets: @username for accounts, #hashtag for tags, plain text for search")
     parser.add_argument("--max-items", type=int, default=50, help="Max items to crawl")
     parser.add_argument("--dry-run", action="store_true", help="Dry run mode")
     parser.add_argument("--skip-llm", action="store_true", help="Skip LLM processing")
@@ -1487,13 +1488,47 @@ async def main():
         print(f"Unknown platform: {args.platform}")
         return
 
+    # brand_config 구성
+    brand_config: Dict[str, Any] = {
+        "id": args.brand_id,
+        "name": args.brand_name,
+    }
+
+    # --target 인자 파싱: @username → accounts, #hashtag → hashtags, plain → search
+    if args.target:
+        accounts = [t.lstrip("@") for t in args.target if t.startswith("@")]
+        hashtags = [t.lstrip("#") for t in args.target if t.startswith("#")]
+        search = [t for t in args.target if not t.startswith("@") and not t.startswith("#")]
+
+        if platform == PlatformType.INSTAGRAM:
+            if accounts:
+                brand_config["usernames"] = accounts
+            if hashtags:
+                brand_config["hashtags"] = hashtags
+            if search:
+                brand_config["search"] = search
+        elif platform == PlatformType.YOUTUBE:
+            if accounts:
+                brand_config["channelHandles"] = accounts
+            if hashtags or search:
+                brand_config["searchKeywords"] = hashtags + search
+        elif platform == PlatformType.TIKTOK:
+            if accounts:
+                brand_config["profiles"] = accounts
+            if hashtags:
+                brand_config["hashtags"] = hashtags
+            if search:
+                brand_config["searchQueries"] = search
+        elif platform == PlatformType.TWITTER:
+            if accounts:
+                brand_config["twitterHandles"] = accounts
+            if hashtags or search:
+                brand_config["searchTerms"] = [f"#{h}" for h in hashtags] + search
+
     # 파이프라인 실행
     stats = await run_pipeline(
         platform=platform,
-        brand_config={
-            "id": args.brand_id,
-            "name": args.brand_name,
-        },
+        brand_config=brand_config,
         options={
             "max_items": args.max_items,
             "dry_run": args.dry_run,

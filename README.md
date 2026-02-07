@@ -1,153 +1,335 @@
-### **README.md**
+# ONTIX Universal
 
-```markdown
-# 🚀 ONTIX Universal Platform
+> The first open-source pipeline that automatically transforms social media data into Knowledge Graphs.
 
-완전 범용 멀티 브랜드 AI 플랫폼
+## What is this?
 
-## ✨ Features
+Social media generates massive unstructured data every second — posts, comments, videos, interactions. ONTIX Universal automatically crawls this data from multiple platforms, extracts entities and relationships using LLMs, and builds a queryable Knowledge Graph in Neo4j. This enables semantic search, trend analysis, and AI-powered insights that go far beyond simple keyword monitoring.
 
-- 🎯 **브랜드 독립적**: 하나의 코드베이스로 무한대 브랜드 지원
-- 🔧 **설정 기반**: YAML 파일로 3분 안에 브랜드 추가
-- 🧠 **RAG 파이프라인**: Retrieval + Generation 자동화
-- 📊 **벡터 검색**: Neo4j + OpenAI Embeddings
-- ⚡ **고성능**: Redis 캐싱, 연결 풀링
-- 🔌 **확장 가능**: 플러그인 방식 Feature 시스템
-
-## 🏗️ Architecture
+## Architecture
 
 ```
-configs/brands/*.yaml  → ConfigManager → UniversalEngine
-                                              ↓
-                                         QuestionRouter
-                                              ↓
-                                          Pipeline
-                                       ↙          ↘
-                                  Retrievers    Generators
-                                       ↓             ↓
-                                   Neo4j/Vector    LLM
+┌─────────────────────────────────────────────────────────────────┐
+│                    ONTIX Universal Pipeline                      │
+│                                                                 │
+│  ┌─────────┐  ┌───────────┐  ┌────────┐  ┌─────────┐  ┌──────┐│
+│  │  CRAWL  │→ │ TRANSFORM │→ │ FILTER │→ │ PROCESS │→ │ SAVE ││
+│  │ (Apify) │  │(Adapters) │  │(Dedup) │  │  (LLM)  │  │(Neo4j││
+│  └─────────┘  └───────────┘  └────────┘  └─────────┘  └──────┘│
+│       ↓             ↓             ↓            ↓           ↓    │
+│   Raw JSON     Common DTO    New Items    KG Triples    Graph DB│
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-## 📦 Installation
+Additionally, a full **RAG (Retrieval-Augmented Generation)** pipeline is built on top of the Knowledge Graph:
+
+```
+configs/brands/*.yaml  →  ConfigManager  →  UniversalEngine
+                                                  ↓
+                                             QuestionRouter
+                                                  ↓
+                                              Pipeline
+                                           ↙          ↘
+                                      Retrievers    Generators
+                                           ↓             ↓
+                                       Neo4j/Vector    LLM
+```
+
+## Supported Platforms
+
+| Platform | Crawl | Transform | KG Generation | Status |
+|----------|-------|-----------|---------------|--------|
+| Instagram | ✅ | ✅ | ✅ | Stable |
+| YouTube | ✅ | ✅ | ✅ | Stable |
+| TikTok | ✅ | ✅ | ✅ | Stable |
+| Twitter/X | ✅ | ✅ | ✅ | Stable |
+
+## Quick Start
+
+### Prerequisites
+
+- Python 3.11+
+- Neo4j 5.x (AuraDB or local)
+- OpenAI API key
+- Apify API token
+
+### Installation
 
 ```bash
-# 1. Clone
-git clone https://github.com/your-org/ontix-universal.git
+git clone https://github.com/AIM-Lab/ontix-universal.git
 cd ontix-universal
-
-# 2. 환경 설정
-cp .env.example .env
-# .env 파일 수정
-
-# 3. 의존성 설치
 pip install -r requirements.txt
-
-# 4. 실행
-python app/main.py
+cp .env.example .env
+# Edit .env with your credentials
 ```
 
-## 🐳 Docker
+### Run the Pipeline
 
 ```bash
-# 전체 스택 실행 (Neo4j + Redis + App)
+# Crawl a specific Instagram account
+python -m app.data_pipeline.pipeline \
+  --platform instagram \
+  --brand-id mybrand \
+  --brand-name "My Brand" \
+  --target @cristiano @neymarjr \
+  --max-items 50
+
+# Crawl by hashtag
+python -m app.data_pipeline.pipeline \
+  --platform instagram \
+  --brand-id mybrand \
+  --brand-name "My Brand" \
+  --target "#fitness" "#gym"
+
+# Crawl YouTube channels
+python -m app.data_pipeline.pipeline \
+  --platform youtube \
+  --brand-id mybrand \
+  --brand-name "My Brand" \
+  --target @mkbhd
+
+# Skip LLM processing (crawl + transform only)
+python -m app.data_pipeline.pipeline \
+  --platform twitter \
+  --brand-id mybrand \
+  --brand-name "My Brand" \
+  --target @elonmusk \
+  --skip-llm
+
+# Start the API server
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+**Target format:** `@username` for accounts, `#hashtag` for tags, plain text for search. If no `--target` is provided, the brand name is used as a hashtag search.
+
+### Docker
+
+```bash
+# Set environment variables
+export NEO4J_PASSWORD=your-secure-password
+export OPENAI_API_KEY=sk-your-key
+export APIFY_TOKEN=your-apify-token
+export JWT_SECRET=$(openssl rand -hex 32)
+
+# Start full stack (Neo4j + Redis + App)
 docker-compose up -d
 
-# 로그 확인
+# View logs
 docker-compose logs -f app
-
-# 종료
-docker-compose down
 ```
 
-## 🎯 Quick Start
+## Configuration
 
-### 1. 브랜드 추가
+Copy `.env.example` to `.env` and fill in:
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `OPENAI_API_KEY` | Yes | OpenAI API key |
+| `NEO4J_URI` | Yes | Neo4j connection URI |
+| `NEO4J_USERNAME` | Yes | Neo4j username |
+| `NEO4J_PASSWORD` | Yes | Neo4j password |
+| `APIFY_TOKEN` | Yes | Apify API token for crawling |
+| `JWT_SECRET` | Prod | JWT signing secret |
+| `REDIS_HOST` | No | Redis host (optional caching) |
+
+### Brand Configuration
+
+Add a new brand by creating a YAML config:
 
 ```bash
-# 템플릿 복사
 cp configs/brands/_template.yaml configs/brands/mybrand.yaml
-
-# YAML 수정
-vim configs/brands/mybrand.yaml
+# Edit the YAML file with brand details
 ```
 
-### 2. API 호출
+### Customizing Entity Extraction
+
+The pipeline uses an LLM prompt to extract entities and relationships from social media text. A generic default prompt (`prompts/default_extraction.txt`) is included and works out of the box. To improve extraction quality for your domain, write a custom prompt and point to it:
+
+```bash
+# Set custom prompt path in .env
+ENTITY_EXTRACTION_PROMPT_PATH=./prompts/my_custom_extraction.txt
+```
+
+The default prompt produces usable results, but a domain-tuned prompt will significantly improve entity and relationship extraction quality.
+
+## Tech Stack
+
+- **Runtime**: Python 3.11, FastAPI, uvicorn
+- **Database**: Neo4j (Knowledge Graph), Redis (Cache)
+- **AI/ML**: OpenAI GPT-5-mini, LangChain, text-embedding-3-small
+- **Crawling**: Apify SDK (4 platform actors)
+- **Auth**: JWT + RBAC (bcrypt password hashing)
+- **Validation**: 4-layer quality/trust/relevance/validation filters
+
+## Project Structure
+
+```
+app/
+├── data_pipeline/     # Core: CRAWL → TRANSFORM → FILTER → PROCESS → SAVE
+│   ├── adapters/      # Platform-specific data parsers
+│   ├── crawlers/      # Apify client wrapper
+│   ├── processors/    # LLM-based KG generation
+│   ├── repositories/  # Neo4j persistence
+│   └── domain/        # Universal data models (DTOs)
+├── core/              # Engine, Pipeline, Auth, Security
+├── api/v1/            # REST API endpoints (15 routers)
+├── features/          # Plugin modules (Advisor, Analytics, etc.)
+├── filters/           # Response quality filters
+├── generators/        # LLM response generators (5 types)
+├── retrievers/        # RAG retrieval modules (6 types)
+└── services/          # Shared services (LLM, Neo4j, Redis, Vector)
+```
+
+## API Documentation
+
+Once the server is running, visit:
+- **Swagger UI**: http://localhost:8000/docs
+- **ReDoc**: http://localhost:8000/redoc
+- **Health Check**: http://localhost:8000/health
+
+### API Examples
+
+**Start a crawl job (Instagram accounts):**
+
+```bash
+curl -X POST http://localhost:8000/api/v1/pipeline/run \
+  -H "Content-Type: application/json" \
+  -d '{
+    "brand_id": "mybrand",
+    "platform": "instagram",
+    "target_type": "accounts",
+    "targets": ["cristiano", "neymarjr"],
+    "max_items": 50
+  }'
+# Response: {"job_id": "a1b2c3d4", "status": "pending", "message": "..."}
+```
+
+**Start a crawl job (hashtag search):**
+
+```bash
+curl -X POST http://localhost:8000/api/v1/pipeline/run \
+  -H "Content-Type: application/json" \
+  -d '{
+    "brand_id": "mybrand",
+    "platform": "tiktok",
+    "target_type": "hashtags",
+    "targets": ["fitness", "workout"],
+    "max_items": 100
+  }'
+```
+
+**Check crawl job status:**
+
+```bash
+curl http://localhost:8000/api/v1/pipeline/status/a1b2c3d4
+# Response: {"job_id": "a1b2c3d4", "status": "completed", "statistics": {...}}
+```
+
+**List all jobs:**
+
+```bash
+curl http://localhost:8000/api/v1/pipeline/jobs?brand_id=mybrand&limit=10
+```
+
+**Query the Knowledge Graph:**
+
+```bash
+curl http://localhost:8000/api/v1/brands/mybrand/graph?limit=100
+# Response: {"nodes": [...], "relationships": [...], "stats": {...}}
+
+curl http://localhost:8000/api/v1/brands/mybrand/graph-summary
+# Response: {"node_count": 342, "relationship_count": 891, "key_concepts": [...]}
+```
+
+**RAG chatbot (ask questions about your data):**
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/chat \
   -H "Content-Type: application/json" \
   -d '{
     "brand_id": "mybrand",
-    "message": "안녕하세요"
+    "message": "What are the most popular topics this week?",
+    "conversation_history": []
   }'
+# Response: {"message": "Based on the data...", "retrieval_contexts": [...], "metadata": {...}}
 ```
 
-## 🌐 SNS Data Pipeline
-
-범용 SNS 데이터 수집 및 지식그래프 생성 파이프라인이 포함되어 있습니다.
-
-### 지원 플랫폼
-- Instagram
-- YouTube
-- TikTok
-- Twitter/X
-
-### 사용법
+**RAG chatbot with session (conversation memory):**
 
 ```bash
-# 테스트 실행
-python scripts/test_pipeline.py
-
-# Instagram 데이터 수집
-python scripts/sync_sns.py \
-  --platform instagram \
-  --actor-id apify/instagram-scraper \
-  --username travel_photographer \
-  --limit 10
-
-# YouTube 데이터 수집
-python scripts/sync_sns.py \
-  --platform youtube \
-  --actor-id apify/youtube-scraper \
-  --video-id dQw4w9WgXcQ \
-  --limit 10
+curl -X POST http://localhost:8000/api/v1/chat/with-session \
+  -H "Content-Type: application/json" \
+  -d '{
+    "brand_id": "mybrand",
+    "message": "Show me the top performing posts",
+    "session_id": null,
+    "use_history": true
+  }'
+# Response includes session_id for follow-up messages
 ```
 
-### 아키텍처
+## Neo4j Vector Index Setup
 
+The RAG pipeline uses vector similarity search on `Concept` nodes. After running the pipeline at least once, create the vector index in Neo4j Browser (`http://localhost:7474`):
+
+```cypher
+-- Create vector index for semantic search (required for RAG)
+CREATE VECTOR INDEX ontix_global_concept_index IF NOT EXISTS
+FOR (c:Concept)
+ON c.embedding
+OPTIONS {
+  indexConfig: {
+    `vector.dimensions`: 1536,
+    `vector.similarity_function`: 'cosine'
+  }
+};
+
+-- Verify the index was created
+SHOW VECTOR INDEXES;
 ```
-Apify Crawler → Adapter → LLM Processor → Neo4j Repository
-     ↓              ↓           ↓              ↓
-  Raw Data    Common DTO   Knowledge Graph  Graph DB
-```
 
-## 📚 Documentation
+| Setting | Value | Notes |
+|---------|-------|-------|
+| Index name | `ontix_global_concept_index` | Must match `NEO4J_VECTOR_INDEX` in `.env` |
+| Node label | `Concept` | Keywords extracted from content |
+| Property | `embedding` | Auto-populated by `text-embedding-3-small` |
+| Dimensions | `1536` | OpenAI `text-embedding-3-small` output size |
+| Similarity | `cosine` | Best for normalized text embeddings |
 
-- [브랜드 가이드](docs/brand_guide.md)
-- [기능 가이드](docs/feature_guide.md)
-- [설정 레퍼런스](docs/config_reference.md)
-- [SNS 파이프라인 가이드](docs/sns_pipeline.md)
+The embeddings are generated automatically when the app connects to Neo4j with a valid OpenAI API key. The vector index enables the RAG chatbot to find semantically similar concepts even when exact keywords don't match.
 
-## 🛠️ Development
+## Development
 
 ```bash
-# 테스트
+# Run tests
 pytest
 
-# 코드 포맷팅
-black app/
-
-# Linting
-flake8 app/
+# Run specific test
+pytest tests/unit/test_filters.py -v
 ```
 
-## 📄 License
+## Roadmap
 
-MIT License
+- [ ] Web UI Dashboard
+- [ ] Comprehensive test suite
+- [ ] Multi-language NER support
+- [ ] Wikidata entity linking
+- [ ] HTTPS / production hardening
+- [ ] Webhook notifications
+- [ ] Export to RDF/OWL
 
-## 👥 Contributors
+## Contributing
 
-- Your Name (@yourname)
-```
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
----
+## License
+
+MIT License — see [LICENSE](LICENSE) for details.
+
+## About
+
+Built by **AIM Lab** — AI Entity Architecture Agency

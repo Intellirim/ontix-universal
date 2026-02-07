@@ -20,7 +20,19 @@ build/
 .env
 .env.local
 .env.*.local
+.env.production
 !.env.example
+
+# ============================================
+# Sensitive Data
+# ============================================
+data/users.json
+
+# ============================================
+# Prompts (proprietary / client-specific)
+# ============================================
+prompts/*
+!prompts/default_extraction.txt
 
 # ============================================
 # IDE
@@ -53,12 +65,15 @@ htmlcov/
 *.sqlite3
 
 # ============================================
-# Temporary
+# Temporary & Debug
 # ============================================
 tmp/
 temp/
 *.tmp
 nul
+response*.json
+debug_output.txt
+test_request.json
 
 # ============================================
 # Logs
@@ -67,12 +82,7 @@ logs/
 *.log
 
 # ============================================
-# Debug / Test files
-# ============================================
-debug_output.txt
-test_request.json
-
-# ============================================
 # Claude
 # ============================================
 .claude/
+.claudeignore
