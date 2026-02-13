@@ -83,7 +83,7 @@ curl http://localhost:8000/api/v1/pipeline/upload/template
 ### Installation
 
 ```bash
-git clone https://github.com/AIM-Lab/ontix-universal.git
+git clone https://github.com/Intellirim/ontix-universal.git
 cd ontix-universal
 pip install -r requirements.txt
 cp .env.example .env
@@ -359,18 +359,18 @@ The open-source pipeline works with any data. For production-grade results, **In
 | Pack | Entities | Key Relationships | Status |
 |------|----------|-------------------|--------|
 | Beauty & Skincare | Product, Ingredient, Skin_Concern, Routine_Step, Creator | CONTAINS_INGREDIENT, TARGETS_CONCERN, SYNERGIZES_WITH | Available |
-| Food & Beverage | Menu_Item, Location, Occasion, Delivery_Platform, Creator | SERVED_AT, PAIRS_WITH, SUITED_FOR | Available |
+| Food & Beverage | Menu_Item, Location, Occasion, Ingredient, Creator | SERVED_AT, PAIRS_WITH, DRIVES_VISIT | Available |
 | Fashion & Apparel | Product, Style_Aesthetic, Body_Type, Collection, Creator | PAIRS_WITH, MATCHES_STYLE, FITS_BODY_TYPE | Available |
 | Tech / SaaS | Product, Feature, Use_Case, Buyer_Persona, Pain_Point | COMPETES_WITH, SOLVES, INTEGRATES_WITH | Available |
 | Fitness & Wellness | Program, Exercise, Goal, Supplement, Diet_Pattern | TARGETS_GOAL, SUPPORTS_GOAL, SHOWS_TRANSFORMATION | Available |
-| Entertainment | IP_Title, Artist, Fandom, Character_Skin, Collaboration | RELEASED, HAS_FANDOM, USES_AUDIO_FROM | Available |
+| Entertainment | IP_Title, Artist_Creator, Fandom, Event, Content | DRIVES_REVENUE, HAS_FANDOM, CAMPAIGNS_FOR | Available |
 
 Each pack includes:
 - **Extraction Prompt** — Domain-specific entity types and relationship definitions
 - **Brand Config** — Optimized retrieval and filter settings
-- **Sample Queries** — 10 production-ready Cypher queries with explanations
+- **Sample Queries** — 10–12 production-ready Cypher queries with explanations
 
-[Get Industry Packs →](https://intellirim.github.io/ontix-universal/)
+[Get Industry Packs →](https://github.com/Intellirim/ontix-universal/wiki/Industry-Packs)
 
 ## Roadmap
 
@@ -399,4 +399,4 @@ MIT License — see [LICENSE](LICENSE) for details.
 
 ## About
 
-Built by **AIM Lab** — AI Entity Architecture Agency
+Built by **[Intellirim](https://github.com/Intellirim)** — AI Infrastructure for the Real World
