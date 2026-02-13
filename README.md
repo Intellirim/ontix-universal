@@ -138,8 +138,14 @@ export OPENAI_API_KEY=sk-your-key
 export APIFY_TOKEN=your-apify-token
 export JWT_SECRET=$(openssl rand -hex 32)
 
-# Start full stack (Neo4j + Redis + App)
+# Start full stack (Neo4j + Redis + App + Web UI)
 docker-compose up -d
+
+# Open the Web UI
+open http://localhost:3000
+
+# API docs
+open http://localhost:8000/docs
 
 # View logs
 docker-compose logs -f app
@@ -191,7 +197,7 @@ The default prompt produces usable results, but a domain-tuned prompt will signi
 ## Project Structure
 
 ```
-app/
+app/                   # FastAPI backend
 ├── data_pipeline/     # Core: CRAWL → TRANSFORM → FILTER → PROCESS → SAVE
 │   ├── adapters/      # Platform-specific data parsers
 │   ├── crawlers/      # Apify client wrapper
@@ -205,7 +211,28 @@ app/
 ├── generators/        # LLM response generators (5 types)
 ├── retrievers/        # RAG retrieval modules (6 types)
 └── services/          # Shared services (LLM, Neo4j, Redis, Vector)
+web/                   # Next.js frontend
+├── src/app/           # App Router pages
+├── src/components/    # Reusable UI components
+├── src/hooks/         # API hooks (SWR)
+├── src/lib/           # Utilities, API client
+└── Dockerfile         # Production build
 ```
+
+## Web UI
+
+ONTIX includes a full-featured **Next.js dashboard** out of the box. After `docker-compose up -d`:
+
+- **Dashboard**: http://localhost:3000
+- Login → Control Room → manage brands, run pipelines, explore your Knowledge Graph, and chat with the AI Advisor
+
+| Page | Description |
+|------|-------------|
+| Control Room | Real-time overview of brands, pipelines, and KG stats |
+| Brand Management | Create/edit brands, configure crawl targets |
+| Data Pipeline | Run crawl jobs, upload CSV/JSON, monitor progress |
+| Knowledge Graph | Interactive graph visualization (Neo4j) |
+| AI Advisor | RAG chatbot — ask questions about your data |
 
 ## API Documentation
 
@@ -376,7 +403,7 @@ Each pack includes:
 
 - [x] CSV/JSON file upload pipeline
 - [x] Industry-specific extraction packs (6 domains)
-- [ ] Web UI Dashboard
+- [x] Web UI Dashboard
 - [ ] Official platform API connectors (Instagram Graph, YouTube Data API)
 - [ ] Webhook data receiver
 - [ ] Comprehensive test suite

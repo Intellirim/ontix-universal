@@ -71,6 +71,22 @@ services:
       - ontix-network
     restart: unless-stopped
 
+  # ==========================================
+  # Web UI (Next.js)
+  # ==========================================
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    container_name: ontix-web
+    ports:
+      - "3000:3000"
+    depends_on:
+      - app
+    networks:
+      - ontix-network
+    restart: unless-stopped
+
 # ==========================================
 # Volumes
 # ==========================================

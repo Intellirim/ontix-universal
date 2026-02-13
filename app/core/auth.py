@@ -398,8 +398,13 @@ def decode_token(token: str) -> Optional[dict]:
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security)
 ) -> User:
-    """현재 로그인된 사용자 가져오기"""
+    """현재 로그인된 사용자 가져오기 (로컬 모드: 토큰 없으면 기본 admin)"""
     if not credentials:
+        # Local mode: return default super admin without authentication
+        users = _load_users()
+        admin = users.get("superadmin")
+        if admin:
+            return User(**{k: v for k, v in admin.items() if k != "password_hash"})
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     payload = decode_token(credentials.credentials)
