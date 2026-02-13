@@ -43,6 +43,33 @@ configs/brands/*.yaml  →  ConfigManager  →  UniversalEngine
 | YouTube | ✅ | ✅ | ✅ | Stable |
 | TikTok | ✅ | ✅ | ✅ | Stable |
 | Twitter/X | ✅ | ✅ | ✅ | Stable |
+| **File Upload (CSV/JSON)** | N/A | ✅ | ✅ | **New** |
+
+### Data Upload
+
+Upload any CSV or JSON file to integrate external data into your Knowledge Graph. Supports:
+
+- **Customer reviews** (Google Reviews, Naver, Coupang, App Store)
+- **Social media exports** (Meta Business Suite, TikTok Analytics)
+- **CRM / feedback data** (surveys, support tickets)
+- **Any text data** with auto column detection (60+ column names recognized)
+
+```bash
+# Upload a CSV file
+curl -X POST http://localhost:8000/api/v1/pipeline/upload \
+  -F "file=@reviews.csv" \
+  -F "brand_id=my-brand"
+
+# With manual column mapping
+curl -X POST http://localhost:8000/api/v1/pipeline/upload \
+  -F "file=@data.csv" \
+  -F "brand_id=my-brand" \
+  -F "column_text=review_body" \
+  -F "column_author=reviewer_name"
+
+# Get upload templates
+curl http://localhost:8000/api/v1/pipeline/upload/template
+```
 
 ## Quick Start
 
@@ -268,6 +295,23 @@ curl -X POST http://localhost:8000/api/v1/chat/with-session \
 # Response includes session_id for follow-up messages
 ```
 
+**Upload external data (CSV/JSON):**
+
+```bash
+# Simple upload
+curl -X POST http://localhost:8000/api/v1/pipeline/upload \
+  -F "file=@customer_reviews.csv" \
+  -F "brand_id=mybrand"
+
+# Dry run (test without saving)
+curl -X POST http://localhost:8000/api/v1/pipeline/upload \
+  -F "file=@data.json" \
+  -F "brand_id=mybrand" \
+  -F "dry_run=true"
+
+# Response: {"job_id": "x1y2z3", "rows_detected": 150, "columns_mapped": {"text": "review", "author": "username", ...}}
+```
+
 ## Neo4j Vector Index Setup
 
 The RAG pipeline uses vector similarity search on `Concept` nodes. After running the pipeline at least once, create the vector index in Neo4j Browser (`http://localhost:7474`):
@@ -308,14 +352,37 @@ pytest
 pytest tests/unit/test_filters.py -v
 ```
 
+## Industry Packs
+
+The open-source pipeline works with any data. For production-grade results, **Industry Packs** provide domain-optimized entity extraction prompts, KG schemas, retrieval configs, and sample queries.
+
+| Pack | Entities | Key Relationships | Status |
+|------|----------|-------------------|--------|
+| Beauty & Skincare | Product, Ingredient, Skin_Concern, Routine_Step, Creator | CONTAINS_INGREDIENT, TARGETS_CONCERN, SYNERGIZES_WITH | Available |
+| Food & Beverage | Menu_Item, Location, Occasion, Delivery_Platform, Creator | SERVED_AT, PAIRS_WITH, SUITED_FOR | Available |
+| Fashion & Apparel | Product, Style_Aesthetic, Body_Type, Collection, Creator | PAIRS_WITH, MATCHES_STYLE, FITS_BODY_TYPE | Available |
+| Tech / SaaS | Product, Feature, Use_Case, Buyer_Persona, Pain_Point | COMPETES_WITH, SOLVES, INTEGRATES_WITH | Available |
+| Fitness & Wellness | Program, Exercise, Goal, Supplement, Diet_Pattern | TARGETS_GOAL, SUPPORTS_GOAL, SHOWS_TRANSFORMATION | Available |
+| Entertainment | IP_Title, Artist, Fandom, Character_Skin, Collaboration | RELEASED, HAS_FANDOM, USES_AUDIO_FROM | Available |
+
+Each pack includes:
+- **Extraction Prompt** — Domain-specific entity types and relationship definitions
+- **Brand Config** — Optimized retrieval and filter settings
+- **Sample Queries** — 10 production-ready Cypher queries with explanations
+
+[Get Industry Packs →](https://intellirim.github.io/ontix-universal/)
+
 ## Roadmap
 
+- [x] CSV/JSON file upload pipeline
+- [x] Industry-specific extraction packs (6 domains)
 - [ ] Web UI Dashboard
+- [ ] Official platform API connectors (Instagram Graph, YouTube Data API)
+- [ ] Webhook data receiver
 - [ ] Comprehensive test suite
 - [ ] Multi-language NER support
 - [ ] Wikidata entity linking
 - [ ] HTTPS / production hardening
-- [ ] Webhook notifications
 - [ ] Export to RDF/OWL
 
 ## Contributing

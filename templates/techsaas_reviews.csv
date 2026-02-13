@@ -1,0 +1,3 @@
+text,author,date,rating,source
+"Migrated our startup from Notion to Linear for project management. Linear's keyboard shortcuts and cycles feature make sprint planning 3x faster. The GitHub integration is seamless. $8/user/month vs Notion's $10. Our 15-person engineering team saves 5 hours per week.",dev_tools_guy,2025-11-20,5,twitter
+"Tried Cursor AI IDE as a VSCode replacement. The AI autocomplete is impressive for Python and TypeScript but hallucinations are still a problem for complex codebases. $20/month pro plan. Still use GitHub Copilot for the reliability. Waiting for better context window support.",code_reviewer,2025-11-22,3,youtube

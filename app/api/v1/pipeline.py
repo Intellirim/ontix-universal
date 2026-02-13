@@ -1,7 +1,7 @@
 """
 Pipeline API - SNS 데이터 파이프라인 실행 엔드포인트
 """
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks, File, UploadFile, Form
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 from enum import Enum
@@ -10,6 +10,9 @@ import asyncio
 import logging
 
 from app.data_pipeline.pipeline import SNSDataPipeline, PlatformType, PipelineStatistics
+from app.data_pipeline.adapters.upload_adapter import (
+    UploadAdapter, parse_csv_file, parse_json_file,
+)
 from app.services.platform.config_manager import ConfigManager
 from app.services.crawlers.web_crawler import get_web_crawler_service, WebCrawlRequest
 
@@ -34,6 +37,7 @@ class PlatformEnum(str, Enum):
     tiktok = "tiktok"
     twitter = "twitter"
     website = "website"  # 웹사이트 크롤러
+    upload = "upload"  # CSV/JSON 파일 업로드
 
 
 class TargetTypeEnum(str, Enum):
@@ -552,6 +556,7 @@ async def get_supported_platforms():
             {"id": "tiktok", "name": "TikTok", "icon": "music"},
             {"id": "twitter", "name": "Twitter/X", "icon": "twitter"},
             {"id": "website", "name": "Website", "icon": "globe"},
+            {"id": "upload", "name": "File Upload (CSV/JSON)", "icon": "upload"},
         ]
     }
 
@@ -564,4 +569,235 @@ async def cleanup_pipeline_jobs():
         "message": f"Cleaned up {deleted_count} old jobs",
         "deleted_count": deleted_count,
         "remaining_jobs": len(pipeline_jobs)
+    }
+
+
+# ============================================
+# File Upload Endpoints
+# ============================================
+
+class UploadResponse(BaseModel):
+    """업로드 응답"""
+    job_id: str
+    status: str
+    message: str
+    rows_detected: int
+    columns_mapped: Dict[str, Optional[str]]
+
+
+async def run_upload_pipeline_task(
+    job_id: str,
+    brand_id: str,
+    raw_data: List[Dict[str, Any]],
+    skip_llm: bool = False,
+    dry_run: bool = False,
+):
+    """백그라운드 업로드 파이프라인 실행"""
+    try:
+        pipeline_jobs[job_id]["status"] = "running"
+        pipeline_jobs[job_id]["progress"] = "Processing uploaded data..."
+        pipeline_jobs[job_id]["logs"] = []
+        add_job_log(job_id, f"업로드 파이프라인 시작: {len(raw_data)}개 행", "info")
+
+        # 브랜드 설정 로드
+        add_job_log(job_id, f"브랜드 설정 로드 중: {brand_id}", "info")
+        try:
+            brand_config = ConfigManager.load_brand_config(brand_id)
+            add_job_log(job_id, "브랜드 설정 로드 완료", "info")
+        except FileNotFoundError:
+            add_job_log(job_id, f"브랜드를 찾을 수 없음: {brand_id}", "error")
+            raise ValueError(f"Brand not found: {brand_id}")
+
+        brand_info = brand_config.get("brand", {})
+        brand_dict = {
+            "id": brand_id,
+            "name": brand_info.get("name", brand_id),
+            "category": brand_info.get("industry", ""),
+        }
+
+        # raw_data는 이미 upload 엔드포인트에서 convert_rows()로 변환됨
+        # column_map도 파이프라인의 UploadAdapter에 이미 설정됨
+        pipeline = get_pipeline()
+        add_job_log(job_id, f"파이프라인 실행 준비: {len(raw_data)}개 행", "info")
+
+        pipeline_jobs[job_id]["progress"] = f"Running pipeline on {len(raw_data)} items..."
+
+        stats = await pipeline.run(
+            platform=PlatformType.UPLOAD,
+            brand_config=brand_dict,
+            options={
+                "dry_run": dry_run,
+                "skip_crawl": True,
+                "skip_llm": skip_llm,
+            },
+            raw_data=raw_data,
+        )
+
+        add_job_log(job_id, f"파이프라인 완료: {stats.get('saved_nodes', 0)}개 노드 저장", "info")
+        pipeline_jobs[job_id]["status"] = "completed"
+        pipeline_jobs[job_id]["progress"] = "Done"
+        pipeline_jobs[job_id]["statistics"] = stats
+        add_job_log(job_id, "✅ 업로드 파이프라인 작업 완료!", "info")
+
+        logger.info(f"Upload pipeline job {job_id} completed: {stats.get('saved_nodes', 0)} nodes saved")
+
+        await trigger_auto_shutdown()
+
+    except Exception as e:
+        logger.error(f"Upload pipeline job {job_id} failed: {e}")
+        add_job_log(job_id, f"❌ 오류 발생: {str(e)}", "error")
+        pipeline_jobs[job_id]["status"] = "failed"
+        pipeline_jobs[job_id]["error"] = str(e)
+
+        await trigger_auto_shutdown()
+
+
+@router.post("/upload", response_model=UploadResponse)
+async def upload_data(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(..., description="CSV or JSON file"),
+    brand_id: str = Form(..., description="브랜드 ID"),
+    skip_llm: bool = Form(False, description="LLM 처리 스킵"),
+    dry_run: bool = Form(False, description="테스트 모드 (실제 저장 안함)"),
+    column_text: Optional[str] = Form(None, description="텍스트 컬럼명 (자동 감지 오버라이드)"),
+    column_author: Optional[str] = Form(None, description="작성자 컬럼명"),
+    column_date: Optional[str] = Form(None, description="날짜 컬럼명"),
+):
+    """
+    CSV/JSON 파일 업로드 → Knowledge Graph 파이프라인 실행
+
+    **지원 파일 형식:**
+    - CSV (UTF-8, CP949/EUC-KR 자동 감지)
+    - JSON (배열 또는 객체)
+
+    **자동 컬럼 매핑:** text, author, date, likes, rating, url, location 등
+    약 60개 이상의 일반적인 컬럼명을 자동으로 인식합니다.
+
+    **사용 예시:**
+    ```bash
+    curl -X POST /api/v1/pipeline/upload \\
+      -F "file=@reviews.csv" \\
+      -F "brand_id=my-brand"
+    ```
+    """
+    import uuid
+
+    # 파일 크기 제한 (50MB)
+    content = await file.read()
+    if len(content) > 50 * 1024 * 1024:
+        raise HTTPException(413, "File too large. Maximum size is 50MB.")
+
+    if not content:
+        raise HTTPException(400, "Empty file")
+
+    # 파일 타입 판별 및 파싱
+    filename = (file.filename or "").lower()
+    content_type = file.content_type or ""
+
+    try:
+        if filename.endswith(".csv") or "csv" in content_type:
+            rows = parse_csv_file(content)
+        elif filename.endswith(".json") or "json" in content_type:
+            rows = parse_json_file(content)
+        else:
+            # 내용 기반 감지 시도
+            try:
+                rows = parse_json_file(content)
+            except ValueError:
+                rows = parse_csv_file(content)
+    except ValueError as e:
+        raise HTTPException(400, f"File parsing failed: {e}")
+
+    if not rows:
+        raise HTTPException(400, "No data rows found in file")
+
+    # 파이프라인의 UploadAdapter로 컬럼 매핑 (TRANSFORM 단계와 동일 인스턴스)
+    pipeline = get_pipeline()
+    adapter = pipeline.adapters.get(PlatformType.UPLOAD)
+    if not adapter:
+        raise HTTPException(500, "Upload adapter not configured")
+
+    headers = list(rows[0].keys())
+    column_map = adapter.set_column_map(headers)
+
+    # 수동 오버라이드
+    overrides = {}
+    if column_text:
+        overrides["text"] = column_text
+    if column_author:
+        overrides["author"] = column_author
+    if column_date:
+        overrides["date"] = column_date
+
+    if overrides:
+        converted = adapter.convert_rows(rows, column_overrides=overrides)
+    else:
+        converted = adapter.convert_rows(rows)
+
+    # 작업 등록
+    job_id = str(uuid.uuid4())[:8]
+    pipeline_jobs[job_id] = {
+        "job_id": job_id,
+        "status": "pending",
+        "brand_id": brand_id,
+        "platform": "upload",
+        "source_file": file.filename,
+        "rows_total": len(rows),
+        "rows_valid": len(converted),
+        "created_at": datetime.now().isoformat(),
+    }
+
+    # 백그라운드 실행
+    background_tasks.add_task(
+        run_upload_pipeline_task,
+        job_id, brand_id, converted, skip_llm, dry_run,
+    )
+
+    return UploadResponse(
+        job_id=job_id,
+        status="pending",
+        message=f"Upload pipeline started: {len(converted)}/{len(rows)} valid rows from {file.filename}",
+        rows_detected=len(rows),
+        columns_mapped={k: v for k, v in column_map.items() if v},
+    )
+
+
+@router.get("/upload/template")
+async def get_upload_templates():
+    """업로드용 CSV/JSON 템플릿 가이드 반환"""
+    return {
+        "description": "CSV/JSON 파일을 업로드하면 자동으로 Knowledge Graph에 통합됩니다.",
+        "supported_formats": ["CSV (UTF-8, CP949)", "JSON (array or object)"],
+        "max_file_size": "50MB",
+        "auto_detected_columns": {
+            "text": "text, content, body, review, comment, caption, message, description, feedback",
+            "author": "author, username, user, name, reviewer",
+            "date": "date, created_at, timestamp, time, posted_at",
+            "likes": "likes, like_count, hearts, reactions",
+            "rating": "rating, score, stars, grade",
+            "url": "url, link, source_url, permalink",
+            "location": "location, place, city, region, store",
+            "hashtags": "hashtags, tags, keywords, labels",
+        },
+        "templates": {
+            "reviews_csv": {
+                "description": "고객 리뷰 데이터",
+                "example": "text,author,date,rating,location\n\"Great product!\",user123,2025-01-15,5,Seoul\n\"Could be better\",user456,2025-01-16,3,Busan",
+            },
+            "social_export_csv": {
+                "description": "SNS 분석 내보내기",
+                "example": "content,username,timestamp,likes,comments,shares\n\"Amazing post!\",brand_fan,2025-01-15T10:00:00Z,150,23,5",
+            },
+            "feedback_csv": {
+                "description": "고객 피드백/설문",
+                "example": "feedback,name,date,score,category\n\"Love the new feature\",Kim,2025-01-15,9,UX",
+            },
+            "generic_json": {
+                "description": "범용 JSON 배열",
+                "example": [
+                    {"text": "Sample review text", "author": "user1", "date": "2025-01-15", "rating": 4.5},
+                    {"text": "Another review", "author": "user2", "date": "2025-01-16", "rating": 3.0},
+                ],
+            },
+        },
     }

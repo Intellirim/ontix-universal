@@ -29,7 +29,7 @@ Extract entities and relationships from the given text to build a 4-layer knowle
 
 - (Brand)-[:HAS_CONCEPT]->(Concept)
 - (Brand)-[:HAS_CONTENT]->(Content)
-- (Content)-[:MENTIONS_CONCEPT {confidence}]->(Concept)
+- (Content)-[:MENTIONS_CONCEPT {{confidence}}]->(Concept)
 - (Content)-[:HAS_INTERACTION]->(Interaction)
 - (Content)-[:CREATED_BY]->(Actor)
 - (Concept)-[:RELATED_TO]->(Concept)

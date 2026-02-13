@@ -14,6 +14,7 @@ class PlatformType(str, Enum):
     YOUTUBE = "youtube"
     TIKTOK = "tiktok"
     TWITTER = "twitter"
+    UPLOAD = "upload"  # CSV/JSON 파일 업로드
 
 
 class ContentType(str, Enum):

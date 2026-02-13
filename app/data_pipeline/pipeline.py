@@ -52,6 +52,7 @@ from .adapters import (
     TwitterAdapter,
     YouTubeAdapter,
 )
+from .adapters.upload_adapter import UploadAdapter
 from .crawlers import ApifyClient
 from .domain.models import (
     ActorDTO,
@@ -64,7 +65,7 @@ from .domain.models import (
 from .processors import LLMProcessor
 from .processors.llm_processor import GraphProcessingResult
 from .repositories import Neo4jRepository
-from .repositories.neo4j_repo import SaveResult
+from .repositories.neo4j_repo import AsyncNeo4jRepository, SaveResult
 
 # Load environment variables
 load_dotenv()
@@ -753,6 +754,7 @@ class SaveStageExecutor(BaseStageExecutor):
     def __init__(self, neo4j_repo: Neo4jRepository):
         super().__init__(PipelineStage.SAVE)
         self.neo4j_repo = neo4j_repo
+        self._async_repo = AsyncNeo4jRepository(sync_repo=neo4j_repo)
 
     async def execute(self, ctx: PipelineContext) -> StageResult:
         """Neo4j에 데이터 저장"""
@@ -774,7 +776,7 @@ class SaveStageExecutor(BaseStageExecutor):
             logger.info(f"[save] Saving {len(ctx.filtered_contents)} Content nodes with metrics...")
             for content in ctx.filtered_contents:
                 try:
-                    await self.neo4j_repo.create_content(content, ctx.brand_id)
+                    await self._async_repo.create_content(content, ctx.brand_id)
                     content_saved += 1
                 except Exception as e:
                     logger.warning(f"  Content save failed for {content.content_id}: {e}")
@@ -961,6 +963,7 @@ class SNSDataPipeline:
             PlatformType.YOUTUBE: YouTubeAdapter(),
             PlatformType.TIKTOK: TikTokAdapter(),
             PlatformType.TWITTER: TwitterAdapter(),
+            PlatformType.UPLOAD: UploadAdapter(),
         }
 
         # 단계 실행기

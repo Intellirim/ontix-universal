@@ -1,0 +1,6 @@
+feedback,name,date,score,category
+"The new dashboard is much more intuitive than before",Kim Minjun,2025-12-01,9,UX
+"API response time needs improvement - sometimes takes 5+ seconds",Park Soyeon,2025-12-02,4,Performance
+"Love the multi-brand feature. Saves us so much time!",Lee Jihoon,2025-12-03,10,Feature
+"Documentation could be better. Took me 2 hours to set up",Choi Yuna,2025-12-04,6,Onboarding
+"Best analytics tool we've used. Replacing Brandwatch next quarter.",Jung Dohyun,2025-12-05,9,General
