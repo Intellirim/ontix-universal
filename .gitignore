@@ -33,6 +33,7 @@ data/users.json
 # ============================================
 prompts/*
 !prompts/default_extraction.txt
+!prompts/shared/
 
 # ============================================
 # Industry Packs (paid / proprietary)
