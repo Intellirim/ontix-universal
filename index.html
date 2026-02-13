@@ -249,6 +249,55 @@
     .open-source h2 { font-size: 28px; font-weight: 700; margin-bottom: 12px; }
     .open-source p { color: var(--text-secondary); max-width: 520px; margin: 0 auto 24px; }
 
+    /* Quickstart */
+    .quickstart-steps {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 24px;
+    }
+    .qs-step {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+    }
+    .qs-step .step-num {
+      display: inline-block;
+      background: var(--accent);
+      color: white;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      text-align: center;
+      line-height: 28px;
+      font-size: 14px;
+      font-weight: 700;
+      margin-right: 10px;
+    }
+    .qs-step h3 { display: inline; font-size: 16px; font-weight: 600; }
+    .qs-step p { color: var(--text-secondary); font-size: 14px; margin: 10px 0 12px; }
+    .qs-step pre {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 18px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 13px;
+      overflow-x: auto;
+      line-height: 1.5;
+      color: var(--text-secondary);
+    }
+    .qs-step pre .comment { color: #6b7280; }
+    .qs-step pre .cmd { color: var(--text); }
+    .qs-step pre .output { color: var(--green); }
+    .qs-time {
+      text-align: center;
+      margin-top: 24px;
+      font-size: 14px;
+      color: var(--text-secondary);
+    }
+    .qs-time strong { color: var(--green); }
+
     /* Footer */
     footer {
       border-top: 1px solid var(--border);
@@ -273,6 +322,7 @@
   <div class="container">
     <div class="logo">ONTIX <span>Universal</span></div>
     <div class="links">
+      <a href="#quickstart">Quickstart</a>
       <a href="#packs">Industry Packs</a>
       <a href="#how-it-works">How It Works</a>
       <a href="https://github.com/Intellirim/ontix-universal" target="_blank">GitHub</a>
@@ -305,6 +355,72 @@
       <span class="step">Knowledge Graph</span>
       <span class="arrow">&rarr;</span>
       <span class="step">RAG Chatbot</span>
+    </div>
+  </div>
+</section>
+
+<section id="quickstart" class="section">
+  <div class="container">
+    <div class="section-header">
+      <div class="badge">Quickstart</div>
+      <h2>Up and Running in 5 Minutes</h2>
+      <p>Docker or local install. Only one API key needed to start.</p>
+    </div>
+
+    <div class="quickstart-steps">
+
+      <div class="qs-step">
+        <span class="step-num">1</span>
+        <h3>Clone & Configure</h3>
+        <p>Get the code and add your OpenAI API key.</p>
+        <pre><span class="cmd">git clone https://github.com/Intellirim/ontix-universal.git
+cd ontix-universal
+cp .env.example .env</span>
+<span class="comment"># Edit .env &mdash; minimum: OPENAI_API_KEY</span></pre>
+      </div>
+
+      <div class="qs-step">
+        <span class="step-num">2</span>
+        <h3>Start with Docker (recommended)</h3>
+        <p>One command spins up Neo4j + Redis + the app. No local installs needed.</p>
+        <pre><span class="cmd">docker-compose up -d</span>
+<span class="output">&#10003; Neo4j running on :7474
+&#10003; Redis running on :6379
+&#10003; ONTIX API running on :8000</span></pre>
+      </div>
+
+      <div class="qs-step">
+        <span class="step-num">3</span>
+        <h3>Crawl or Upload Data</h3>
+        <p>Crawl a social media account, or upload a CSV file you already have.</p>
+        <pre><span class="comment"># Option A: Crawl Instagram (needs APIFY_TOKEN in .env)</span>
+<span class="cmd">curl -X POST http://localhost:8000/api/v1/pipeline/run \
+  -H "Content-Type: application/json" \
+  -d '{"brand_id":"demo","platform":"instagram",
+       "target_type":"accounts","targets":["nike"],"max_items":20}'</span>
+
+<span class="comment"># Option B: Upload a CSV (no Apify needed)</span>
+<span class="cmd">curl -X POST http://localhost:8000/api/v1/pipeline/upload \
+  -F "file=@reviews.csv" -F "brand_id=demo"</span>
+<span class="output">{"job_id":"a1b2c3","status":"pending","rows_detected":150}</span></pre>
+      </div>
+
+      <div class="qs-step">
+        <span class="step-num">4</span>
+        <h3>Ask Questions</h3>
+        <p>Your Knowledge Graph is built. Now ask anything about your data.</p>
+        <pre><span class="cmd">curl -X POST http://localhost:8000/api/v1/chat \
+  -H "Content-Type: application/json" \
+  -d '{"brand_id":"demo",
+       "message":"What are the most discussed topics?"}'</span>
+<span class="output">{"message":"Based on your data, the top 3 topics are..."}</span></pre>
+      </div>
+
+    </div>
+
+    <div class="qs-time">
+      <strong>Prerequisites:</strong> Docker + OpenAI API key. That's it.<br>
+      For SNS crawling, also add an <a href="https://apify.com" target="_blank">Apify</a> token (free tier available).
     </div>
   </div>
 </section>
