@@ -56,6 +56,7 @@
     nav .links { display: flex; gap: 24px; font-size: 14px; }
     nav .links a { color: var(--text-secondary); }
     nav .links a:hover { color: var(--text); }
+    nav .mobile-toggle { display: none; background: none; border: none; color: var(--text); font-size: 20px; cursor: pointer; }
 
     /* Hero */
     .hero { padding: 100px 0 80px; text-align: center; }
@@ -298,6 +299,56 @@
     }
     .qs-time strong { color: var(--green); }
 
+    /* Install Guide */
+    .install-steps {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+      max-width: 700px;
+      margin: 0 auto;
+    }
+    .install-step {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px 24px;
+    }
+    .install-step h3 {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .install-step pre {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 14px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 13px;
+      overflow-x: auto;
+      color: var(--text-secondary);
+    }
+    .install-step p { font-size: 14px; color: var(--text-secondary); }
+
+    /* FAQ */
+    .faq-list { max-width: 700px; margin: 0 auto; }
+    .faq-item {
+      border-bottom: 1px solid var(--border);
+      padding: 20px 0;
+    }
+    .faq-item:last-child { border-bottom: none; }
+    .faq-item h3 {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      cursor: pointer;
+    }
+    .faq-item p {
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+
     /* Footer */
     footer {
       border-top: 1px solid var(--border);
@@ -312,7 +363,7 @@
       .packs-grid { grid-template-columns: 1fr; }
       .hero { padding: 60px 0 40px; }
       .section { padding: 48px 0; }
-      nav .links { gap: 16px; }
+      nav .links { gap: 16px; font-size: 13px; }
     }
   </style>
 </head>
@@ -324,7 +375,8 @@
     <div class="links">
       <a href="#quickstart">Quickstart</a>
       <a href="#packs">Industry Packs</a>
-      <a href="#how-it-works">How It Works</a>
+      <a href="#install-guide">Install Guide</a>
+      <a href="#faq">FAQ</a>
       <a href="https://github.com/Intellirim/ontix-universal" target="_blank">GitHub</a>
     </div>
   </div>
@@ -646,23 +698,111 @@ cp .env.example .env</span>
   </div>
 </section>
 
+<section id="install-guide" class="section">
+  <div class="container">
+    <div class="section-header">
+      <div class="badge">After Purchase</div>
+      <h2>Install Your Industry Pack</h2>
+      <p>Download the ZIP, drop it into your project, and restart. Takes 30 seconds.</p>
+    </div>
+
+    <div class="install-steps">
+      <div class="install-step">
+        <h3>1. Download &amp; Extract</h3>
+        <p>After purchase, you'll receive a ZIP file via email. Extract it:</p>
+        <pre>unzip ontix-beauty-pack.zip -d packs/beauty/</pre>
+      </div>
+      <div class="install-step">
+        <h3>2. Verify Pack Contents</h3>
+        <p>Each pack contains 3 files:</p>
+        <pre>packs/beauty/
+  ├── extraction_prompt.txt   # Domain-specific entity definitions
+  ├── brand_config.yaml       # Optimized retrieval &amp; filter settings
+  └── sample_queries.md       # 10-12 production Cypher queries</pre>
+      </div>
+      <div class="install-step">
+        <h3>3. Activate the Pack</h3>
+        <p>Set the pack name in your .env or API call, then restart the server:</p>
+        <pre># In .env
+INDUSTRY_PACK=beauty
+
+# Or via API
+curl -X POST http://localhost:8000/api/v1/pipeline/run \
+  -d '{"brand_id":"demo", "industry_pack":"beauty", ...}'
+
+# Restart to apply
+docker-compose restart app</pre>
+      </div>
+      <div class="install-step">
+        <h3>4. Run Your First Query</h3>
+        <p>Open sample_queries.md and try the included Cypher queries in Neo4j Browser:</p>
+        <pre># Example: Top ingredients mentioned across all brands
+MATCH (p:Product)-[:CONTAINS]->(i:Ingredient)
+RETURN i.name, count(p) AS mentions
+ORDER BY mentions DESC LIMIT 10</pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="faq" class="section" style="background: var(--surface);">
+  <div class="container">
+    <div class="section-header">
+      <div class="badge">FAQ</div>
+      <h2>Frequently Asked Questions</h2>
+    </div>
+
+    <div class="faq-list">
+      <div class="faq-item">
+        <h3>What's included in each Industry Pack?</h3>
+        <p>Each pack contains 3 files: an extraction prompt with domain-specific entity and relationship definitions, a brand_config.yaml with optimized retrieval/filter/generation settings, and 10-12 production-ready Cypher queries with explanations. No code changes needed &mdash; just drop the files in and go.</p>
+      </div>
+      <div class="faq-item">
+        <h3>Do I need to modify any code?</h3>
+        <p>No. Industry Packs are pure configuration. Extract the ZIP into your packs/ directory, set the pack name in .env, and restart. The pipeline automatically uses the pack's prompts and settings.</p>
+      </div>
+      <div class="faq-item">
+        <h3>What's the license?</h3>
+        <p>The ONTIX Universal core is MIT licensed &mdash; fully open source, use it however you want. Industry Packs are sold under a per-team commercial license: one purchase covers your entire team, unlimited projects, forever.</p>
+      </div>
+      <div class="faq-item">
+        <h3>Do I get updates?</h3>
+        <p>Yes. All purchases include lifetime updates. When we improve a pack's prompts or add new queries, you'll receive the updated ZIP via email at no extra cost.</p>
+      </div>
+      <div class="faq-item">
+        <h3>Can I get a refund?</h3>
+        <p>Yes. We offer a 14-day money-back guarantee. If the pack doesn't work for your use case, email us and we'll refund you &mdash; no questions asked.</p>
+      </div>
+      <div class="faq-item">
+        <h3>What if I need a custom pack for my industry?</h3>
+        <p>Contact us at <a href="mailto:hanso@intellirim.com">hanso@intellirim.com</a>. We can build custom entity schemas, relationship definitions, and queries tailored to your specific domain.</p>
+      </div>
+      <div class="faq-item">
+        <h3>Is the Bundle really a better deal?</h3>
+        <p>The All 6 Packs Bundle saves you 47% ($249 vs $474 individually). It's ideal for agencies or teams serving clients across multiple industries. You also get all future packs added to the bundle for free.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
 <footer>
   <div class="container">
-    <p>&copy; 2026 <a href="https://github.com/Intellirim">Intellirim</a>. ONTIX Universal is MIT licensed.</p>
+    <p>&copy; 2026 <a href="https://github.com/Intellirim">Intellirim</a>. ONTIX Universal is MIT licensed. Industry Packs are sold separately.</p>
   </div>
 </footer>
 
 <script>
-  // Lemonsqueezy checkout links — replace '#' with actual URLs after creating products
-  // Format: https://your-store.lemonsqueezy.com/checkout/buy/VARIANT_ID
+  // Lemonsqueezy checkout links
+  // Replace '#' with your actual Lemonsqueezy checkout URLs
+  // Format: https://intellirim.lemonsqueezy.com/buy/VARIANT_ID
   const CHECKOUT_LINKS = {
-    'beauty':        '#',  // TODO: Replace with Lemonsqueezy checkout URL
-    'fnb':           '#',  // TODO: Replace with Lemonsqueezy checkout URL
-    'fashion':       '#',  // TODO: Replace with Lemonsqueezy checkout URL
-    'tech-saas':     '#',  // TODO: Replace with Lemonsqueezy checkout URL
-    'fitness':       '#',  // TODO: Replace with Lemonsqueezy checkout URL
-    'entertainment': '#',  // TODO: Replace with Lemonsqueezy checkout URL
-    'bundle':        '#',  // TODO: Replace with Lemonsqueezy checkout URL
+    'beauty':        '#',
+    'fnb':           '#',
+    'fashion':       '#',
+    'tech-saas':     '#',
+    'fitness':       '#',
+    'entertainment': '#',
+    'bundle':        '#',
   };
 
   document.querySelectorAll('[data-pack]').forEach(btn => {
@@ -674,7 +814,9 @@ cp .env.example .env</span>
     } else {
       btn.addEventListener('click', e => {
         e.preventDefault();
-        alert('Coming soon! Join our GitHub for updates.');
+        window.location.href = 'mailto:hanso@intellirim.com?subject=ONTIX%20Industry%20Pack%20-%20' +
+          encodeURIComponent(pack) + '&body=I%20am%20interested%20in%20purchasing%20the%20' +
+          encodeURIComponent(pack) + '%20Industry%20Pack.';
       });
     }
   });
