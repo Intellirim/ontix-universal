@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ONTIX Universal — Social Media to Knowledge Graph</title>
+  <meta name="description" content="Open-source pipeline that transforms social media data into Knowledge Graphs. Industry Packs for Beauty, F&B, Fashion, Tech, Fitness, Entertainment.">
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="ONTIX Universal — Social Media to Knowledge Graph">
+  <meta property="og:description" content="Open-source pipeline that transforms social media data into queryable Knowledge Graphs with AI-powered entity extraction.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://intellirim.github.io/ontix-universal/">
+
+  <style>
+    :root {
+      --bg: #0a0a0a;
+      --surface: #141414;
+      --surface2: #1e1e1e;
+      --border: #2a2a2a;
+      --text: #e8e8e8;
+      --text-secondary: #999;
+      --accent: #6366f1;
+      --accent-hover: #818cf8;
+      --green: #22c55e;
+      --orange: #f59e0b;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { color: var(--accent-hover); }
+
+    .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+
+    /* Nav */
+    nav {
+      border-bottom: 1px solid var(--border);
+      padding: 16px 0;
+      position: sticky;
+      top: 0;
+      background: rgba(10,10,10,0.95);
+      backdrop-filter: blur(8px);
+      z-index: 100;
+    }
+    nav .container { display: flex; justify-content: space-between; align-items: center; }
+    nav .logo { font-size: 18px; font-weight: 700; letter-spacing: -0.5px; }
+    nav .logo span { color: var(--accent); }
+    nav .links { display: flex; gap: 24px; font-size: 14px; }
+    nav .links a { color: var(--text-secondary); }
+    nav .links a:hover { color: var(--text); }
+
+    /* Hero */
+    .hero { padding: 100px 0 80px; text-align: center; }
+    .hero h1 {
+      font-size: clamp(32px, 5vw, 56px);
+      font-weight: 800;
+      letter-spacing: -1.5px;
+      line-height: 1.1;
+      margin-bottom: 20px;
+    }
+    .hero h1 .highlight {
+      background: linear-gradient(135deg, var(--accent), #a78bfa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .hero p {
+      font-size: 18px;
+      color: var(--text-secondary);
+      max-width: 640px;
+      margin: 0 auto 32px;
+    }
+    .hero-buttons { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      transition: all 0.2s;
+      border: none;
+      cursor: pointer;
+    }
+    .btn-primary { background: var(--accent); color: white; }
+    .btn-primary:hover { background: var(--accent-hover); color: white; transform: translateY(-1px); }
+    .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+    .btn-secondary:hover { border-color: var(--accent); color: white; transform: translateY(-1px); }
+
+    /* Pipeline */
+    .pipeline { padding: 60px 0; }
+    .pipeline-visual {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 32px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 14px;
+      color: var(--text-secondary);
+      overflow-x: auto;
+      text-align: center;
+    }
+    .pipeline-visual .step {
+      display: inline-block;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 16px;
+      margin: 4px;
+      color: var(--text);
+      font-weight: 500;
+    }
+    .pipeline-visual .arrow { color: var(--accent); margin: 0 4px; }
+
+    /* Section */
+    .section { padding: 80px 0; }
+    .section-header { text-align: center; margin-bottom: 48px; }
+    .section-header h2 {
+      font-size: 32px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      margin-bottom: 12px;
+    }
+    .section-header p { color: var(--text-secondary); font-size: 16px; max-width: 560px; margin: 0 auto; }
+    .badge {
+      display: inline-block;
+      background: rgba(99,102,241,0.15);
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 4px;
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* Pack Cards */
+    .packs-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 20px;
+    }
+    .pack-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 28px;
+      transition: border-color 0.2s, transform 0.2s;
+    }
+    .pack-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+    .pack-card .pack-icon { font-size: 28px; margin-bottom: 12px; }
+    .pack-card h3 { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+    .pack-card p { font-size: 14px; color: var(--text-secondary); margin-bottom: 16px; line-height: 1.5; }
+    .pack-card .entities {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 16px;
+    }
+    .pack-card .entity-tag {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      font-size: 12px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      color: var(--text-secondary);
+    }
+    .pack-card .pack-price {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .pack-card .price {
+      font-size: 24px;
+      font-weight: 800;
+    }
+    .pack-card .price-note {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    /* Bundle */
+    .bundle {
+      background: var(--surface);
+      border: 2px solid var(--accent);
+      border-radius: 12px;
+      padding: 36px;
+      text-align: center;
+      margin-top: 32px;
+      position: relative;
+    }
+    .bundle-badge {
+      position: absolute;
+      top: -12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--accent);
+      color: white;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 4px 16px;
+      border-radius: 20px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .bundle h3 { font-size: 24px; font-weight: 700; margin-bottom: 8px; }
+    .bundle .price { font-size: 36px; font-weight: 800; margin: 12px 0; }
+    .bundle .price .original {
+      text-decoration: line-through;
+      color: var(--text-secondary);
+      font-size: 20px;
+      font-weight: 400;
+      margin-right: 8px;
+    }
+    .bundle p { color: var(--text-secondary); font-size: 14px; margin-bottom: 20px; }
+
+    /* Features */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 20px;
+    }
+    .feature-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+    }
+    .feature-card h3 { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
+    .feature-card p { font-size: 14px; color: var(--text-secondary); }
+
+    /* Open Source */
+    .open-source {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 48px;
+      text-align: center;
+    }
+    .open-source h2 { font-size: 28px; font-weight: 700; margin-bottom: 12px; }
+    .open-source p { color: var(--text-secondary); max-width: 520px; margin: 0 auto 24px; }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 32px 0;
+      text-align: center;
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
+
+    /* Responsive */
+    @media (max-width: 640px) {
+      .packs-grid { grid-template-columns: 1fr; }
+      .hero { padding: 60px 0 40px; }
+      .section { padding: 48px 0; }
+      nav .links { gap: 16px; }
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="container">
+    <div class="logo">ONTIX <span>Universal</span></div>
+    <div class="links">
+      <a href="#packs">Industry Packs</a>
+      <a href="#how-it-works">How It Works</a>
+      <a href="https://github.com/Intellirim/ontix-universal" target="_blank">GitHub</a>
+    </div>
+  </div>
+</nav>
+
+<section class="hero">
+  <div class="container">
+    <h1>Social Media &rarr; <span class="highlight">Knowledge Graph</span></h1>
+    <p>Open-source pipeline that crawls Instagram, YouTube, TikTok, X and transforms unstructured social data into queryable Knowledge Graphs with LLM-powered entity extraction.</p>
+    <div class="hero-buttons">
+      <a href="#packs" class="btn btn-primary">Get Industry Packs</a>
+      <a href="https://github.com/Intellirim/ontix-universal" class="btn btn-secondary" target="_blank">View on GitHub</a>
+    </div>
+  </div>
+</section>
+
+<section class="pipeline">
+  <div class="container">
+    <div class="pipeline-visual">
+      <span class="step">Crawl</span>
+      <span class="arrow">&rarr;</span>
+      <span class="step">Transform</span>
+      <span class="arrow">&rarr;</span>
+      <span class="step">Filter</span>
+      <span class="arrow">&rarr;</span>
+      <span class="step">Extract (LLM)</span>
+      <span class="arrow">&rarr;</span>
+      <span class="step">Knowledge Graph</span>
+      <span class="arrow">&rarr;</span>
+      <span class="step">RAG Chatbot</span>
+    </div>
+  </div>
+</section>
+
+<section id="how-it-works" class="section">
+  <div class="container">
+    <div class="section-header">
+      <div class="badge">How It Works</div>
+      <h2>From Raw Data to Intelligence</h2>
+      <p>The generic pipeline works out of the box. Industry Packs unlock domain-specific intelligence.</p>
+    </div>
+    <div class="features-grid">
+      <div class="feature-card">
+        <h3>1. Crawl Any Platform</h3>
+        <p>Instagram, YouTube, TikTok, X &mdash; or upload CSV/JSON from any source. 60+ column names auto-detected.</p>
+      </div>
+      <div class="feature-card">
+        <h3>2. Extract Entities with LLM</h3>
+        <p>GPT-5-mini reads every post and extracts structured entities and relationships. Generic prompt included free.</p>
+      </div>
+      <div class="feature-card">
+        <h3>3. Build Knowledge Graph</h3>
+        <p>Entities and relationships are stored in Neo4j. Query with Cypher, visualize connections, find patterns.</p>
+      </div>
+      <div class="feature-card">
+        <h3>4. Ask Questions (RAG)</h3>
+        <p>Built-in RAG chatbot answers questions about your data with retrieval-augmented generation and 4-layer quality filters.</p>
+      </div>
+      <div class="feature-card">
+        <h3>5. Domain Intelligence</h3>
+        <p><strong>With Industry Packs:</strong> Extract domain-specific entities (ingredients, programs, IPs) instead of generic keywords.</p>
+      </div>
+      <div class="feature-card">
+        <h3>6. Production Queries</h3>
+        <p><strong>With Industry Packs:</strong> 10-12 ready-to-use Cypher queries for competitive analysis, ROI tracking, and trend detection.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="packs" class="section" style="background: var(--surface);">
+  <div class="container">
+    <div class="section-header">
+      <div class="badge">Industry Packs</div>
+      <h2>Domain-Optimized Intelligence</h2>
+      <p>Each pack includes extraction prompts, brand configs, and production-ready Cypher queries tailored for your industry.</p>
+    </div>
+
+    <div class="packs-grid">
+
+      <!-- Beauty -->
+      <div class="pack-card">
+        <div class="pack-icon">&#x1f48e;</div>
+        <h3>Beauty & Skincare</h3>
+        <p>Ingredient analysis, routine tracking, and creator influence measurement for cosmetics and skincare brands.</p>
+        <div class="entities">
+          <span class="entity-tag">Product</span>
+          <span class="entity-tag">Ingredient</span>
+          <span class="entity-tag">Skin_Concern</span>
+          <span class="entity-tag">Routine_Step</span>
+          <span class="entity-tag">Creator</span>
+        </div>
+        <div class="pack-price">
+          <div>
+            <div class="price">$79</div>
+            <div class="price-note">one-time, lifetime updates</div>
+          </div>
+          <a href="#" class="btn btn-primary" data-pack="beauty">Buy Pack</a>
+        </div>
+      </div>
+
+      <!-- F&B -->
+      <div class="pack-card">
+        <div class="pack-icon">&#x1f37d;&#xfe0f;</div>
+        <h3>Food & Beverage</h3>
+        <p>Menu intelligence, location performance, and creator-driven foot traffic analysis for restaurants and F&B brands.</p>
+        <div class="entities">
+          <span class="entity-tag">Menu_Item</span>
+          <span class="entity-tag">Location</span>
+          <span class="entity-tag">Occasion</span>
+          <span class="entity-tag">Ingredient</span>
+          <span class="entity-tag">Creator</span>
+        </div>
+        <div class="pack-price">
+          <div>
+            <div class="price">$79</div>
+            <div class="price-note">one-time, lifetime updates</div>
+          </div>
+          <a href="#" class="btn btn-primary" data-pack="fnb">Buy Pack</a>
+        </div>
+      </div>
+
+      <!-- Fashion -->
+      <div class="pack-card">
+        <div class="pack-icon">&#x1f45f;</div>
+        <h3>Fashion & Apparel</h3>
+        <p>Style trend tracking, body-inclusive fit intelligence, and resale value analysis for fashion brands.</p>
+        <div class="entities">
+          <span class="entity-tag">Product</span>
+          <span class="entity-tag">Style_Aesthetic</span>
+          <span class="entity-tag">Body_Type</span>
+          <span class="entity-tag">Collection</span>
+          <span class="entity-tag">Color_Palette</span>
+        </div>
+        <div class="pack-price">
+          <div>
+            <div class="price">$79</div>
+            <div class="price-note">one-time, lifetime updates</div>
+          </div>
+          <a href="#" class="btn btn-primary" data-pack="fashion">Buy Pack</a>
+        </div>
+      </div>
+
+      <!-- Tech/SaaS -->
+      <div class="pack-card">
+        <div class="pack-icon">&#x1f4bb;</div>
+        <h3>Tech / SaaS</h3>
+        <p>Competitive intelligence, feature sentiment tracking, and developer migration analysis for software products.</p>
+        <div class="entities">
+          <span class="entity-tag">Product</span>
+          <span class="entity-tag">Feature</span>
+          <span class="entity-tag">Use_Case</span>
+          <span class="entity-tag">Buyer_Persona</span>
+          <span class="entity-tag">Pain_Point</span>
+        </div>
+        <div class="pack-price">
+          <div>
+            <div class="price">$79</div>
+            <div class="price-note">one-time, lifetime updates</div>
+          </div>
+          <a href="#" class="btn btn-primary" data-pack="tech-saas">Buy Pack</a>
+        </div>
+      </div>
+
+      <!-- Fitness -->
+      <div class="pack-card">
+        <div class="pack-icon">&#x1f3cb;&#xfe0f;</div>
+        <h3>Fitness & Wellness</h3>
+        <p>Program effectiveness tracking, supplement intelligence, and transformation evidence analysis for fitness brands.</p>
+        <div class="entities">
+          <span class="entity-tag">Program</span>
+          <span class="entity-tag">Exercise</span>
+          <span class="entity-tag">Goal</span>
+          <span class="entity-tag">Supplement</span>
+          <span class="entity-tag">Diet_Pattern</span>
+        </div>
+        <div class="pack-price">
+          <div>
+            <div class="price">$79</div>
+            <div class="price-note">one-time, lifetime updates</div>
+          </div>
+          <a href="#" class="btn btn-primary" data-pack="fitness">Buy Pack</a>
+        </div>
+      </div>
+
+      <!-- Entertainment -->
+      <div class="pack-card">
+        <div class="pack-icon">&#x1f3ae;</div>
+        <h3>Entertainment</h3>
+        <p>IP performance tracking, fandom intelligence, and revenue attribution for games, music, and media brands.</p>
+        <div class="entities">
+          <span class="entity-tag">IP_Title</span>
+          <span class="entity-tag">Artist_Creator</span>
+          <span class="entity-tag">Fandom</span>
+          <span class="entity-tag">Event</span>
+          <span class="entity-tag">Content</span>
+        </div>
+        <div class="pack-price">
+          <div>
+            <div class="price">$79</div>
+            <div class="price-note">one-time, lifetime updates</div>
+          </div>
+          <a href="#" class="btn btn-primary" data-pack="entertainment">Buy Pack</a>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Bundle -->
+    <div class="bundle">
+      <div class="bundle-badge">Best Value</div>
+      <h3>All 6 Industry Packs</h3>
+      <p>Get every pack and all future updates. Perfect for agencies serving multiple industries.</p>
+      <div class="price"><span class="original">$474</span> $249</div>
+      <a href="#" class="btn btn-primary" data-pack="bundle" style="font-size: 16px; padding: 14px 32px;">Buy All Packs &mdash; Save 47%</a>
+    </div>
+
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <div class="section-header">
+      <div class="badge">What's Included</div>
+      <h2>Each Pack Contains</h2>
+    </div>
+    <div class="features-grid">
+      <div class="feature-card">
+        <h3>Extraction Prompt</h3>
+        <p>Domain-specific entity types and relationship definitions. Drop-in replacement for the generic prompt &mdash; immediately improves KG quality for your industry.</p>
+      </div>
+      <div class="feature-card">
+        <h3>Brand Config</h3>
+        <p>Optimized retrieval, filter, and generation settings. Temperature, trust thresholds, and top-k values tuned for your domain's data characteristics.</p>
+      </div>
+      <div class="feature-card">
+        <h3>Sample Queries</h3>
+        <p>10-12 production-ready Cypher queries with explanations. Covers competitive analysis, ROI tracking, trend detection, and creator performance.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <div class="open-source">
+      <h2>100% Open Source Core</h2>
+      <p>The full pipeline &mdash; crawling, transformation, KG generation, RAG chatbot &mdash; is MIT licensed. Industry Packs are optional add-ons for production-grade results.</p>
+      <a href="https://github.com/Intellirim/ontix-universal" class="btn btn-secondary" target="_blank">Star on GitHub</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    <p>&copy; 2026 <a href="https://github.com/Intellirim">Intellirim</a>. ONTIX Universal is MIT licensed.</p>
+  </div>
+</footer>
+
+<script>
+  // Lemonsqueezy checkout links — replace '#' with actual URLs after creating products
+  // Format: https://your-store.lemonsqueezy.com/checkout/buy/VARIANT_ID
+  const CHECKOUT_LINKS = {
+    'beauty':        '#',  // TODO: Replace with Lemonsqueezy checkout URL
+    'fnb':           '#',  // TODO: Replace with Lemonsqueezy checkout URL
+    'fashion':       '#',  // TODO: Replace with Lemonsqueezy checkout URL
+    'tech-saas':     '#',  // TODO: Replace with Lemonsqueezy checkout URL
+    'fitness':       '#',  // TODO: Replace with Lemonsqueezy checkout URL
+    'entertainment': '#',  // TODO: Replace with Lemonsqueezy checkout URL
+    'bundle':        '#',  // TODO: Replace with Lemonsqueezy checkout URL
+  };
+
+  document.querySelectorAll('[data-pack]').forEach(btn => {
+    const pack = btn.getAttribute('data-pack');
+    const url = CHECKOUT_LINKS[pack];
+    if (url && url !== '#') {
+      btn.href = url;
+      btn.target = '_blank';
+    } else {
+      btn.addEventListener('click', e => {
+        e.preventDefault();
+        alert('Coming soon! Join our GitHub for updates.');
+      });
+    }
+  });
+</script>
+
+</body>
+</html>

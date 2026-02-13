@@ -370,7 +370,7 @@ Each pack includes:
 - **Brand Config** — Optimized retrieval and filter settings
 - **Sample Queries** — 10–12 production-ready Cypher queries with explanations
 
-[Get Industry Packs →](https://github.com/Intellirim/ontix-universal/wiki/Industry-Packs)
+[Get Industry Packs →](https://intellirim.github.io/ontix-universal/)
 
 ## Roadmap
 
